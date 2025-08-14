@@ -1,0 +1,31 @@
+{
+  "name": "crypto-gem-hunter",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "ts-node src/cli.ts",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:generate": "prisma generate",
+    "simulate": "tsx src/simulateInvestors.ts",
+    "create-investor": "tsx prisma/investorSeed.ts",
+    "run-action": "tsx src/runAction.ts --all",
+    "sim:run": "tsx src/sim/runAndStats.ts",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.6.0",
+    "axios": "^1.5.0",
+    "commander": "^11.0.0",
+    "node-telegram-bot-api": "^0.61.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.6.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.6.0",
+    "tsx": "^3.12.7",
+    "vitest": "^1.0.0",
+    "@types/node": "^18.0.0"
+  }
+}
