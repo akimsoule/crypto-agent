@@ -12,32 +12,32 @@ datasource db {
 
 // Table existante pour les gems de CryptoGemHunter
 model CryptoGemProject {
-  id                          Int       @id @default(autoincrement())
-  coinId                      String    @unique
-  symbol                      String
-  name                        String
-  currentPrice               Float
-  marketCap                  Float
-  marketCapRank              Int
-  priceChangePercentage24h   Float
-  volume24h                  Float
-  totalVolume                Float
-  circulatingSupply          Float
-  maxSupply                  Float?
-  ath                        Float
-  athChangePercentage        Float
-  gemScore                   Float?
-  sentimentScore             Float?
-  sentimentMentions          Int?
-  sentimentPositiveRatio     Float?
-  needsSentimentAnalysis     Boolean   @default(false)
-  lastUpdated                DateTime  @default(now())
-  lastAnalyzed               DateTime?
-  lastTelegramSent           DateTime?
-  
+  id                       Int       @id @default(autoincrement())
+  coinId                   String    @unique
+  symbol                   String
+  name                     String
+  currentPrice             Float
+  marketCap                Float
+  marketCapRank            Int
+  priceChangePercentage24h Float
+  volume24h                Float
+  totalVolume              Float
+  circulatingSupply        Float
+  maxSupply                Float?
+  ath                      Float
+  athChangePercentage      Float
+  gemScore                 Float?
+  sentimentScore           Float?
+  sentimentMentions        Int?
+  sentimentPositiveRatio   Float?
+  needsSentimentAnalysis   Boolean   @default(false)
+  lastUpdated              DateTime  @default(now())
+  lastAnalyzed             DateTime?
+  lastTelegramSent         DateTime?
+
   // Relations avec les investissements
-  investments                CryptoInvestment[]
-  
+  investments CryptoInvestment[]
+
   @@map("crypto_gem_projects")
 }
 
@@ -49,135 +49,135 @@ model CryptoGemAlert {
   project   String
   priority  String
   createdAt DateTime @default(now())
-  
+
   @@map("crypto_gem_alerts")
 }
 
 // Table existante pour l'état du système
 model CryptoGemState {
-  id                 Int      @id @default(autoincrement())
-  currentPage        Int      @default(1)
-  maxPages          Int      @default(20)
-  batchSize         Int      @default(100)
-  lastCycleStart    DateTime @default(now())
-  lastFullAnalysis  DateTime?
-  processPhase      String   @default("FETCH") // FETCH, ANALYZE, COMPLETE
-  isProcessing      Boolean  @default(false)
-  
+  id               Int       @id @default(autoincrement())
+  currentPage      Int       @default(1)
+  maxPages         Int       @default(20)
+  batchSize        Int       @default(100)
+  lastCycleStart   DateTime  @default(now())
+  lastFullAnalysis DateTime?
+  processPhase     String    @default("FETCH") // FETCH, ANALYZE, COMPLETE
+  isProcessing     Boolean   @default(false)
+
   @@map("crypto_gem_states")
 }
 
 // Nouvelle table pour les profils d'investisseurs
 model InvestorProfile {
-  id                String    @id
-  name              String
-  type              String    // conservative, balanced, aggressive, contrarian, momentum
-  riskTolerance     Float
-  maxPositionSize   Float     // Pourcentage
-  holdingPeriod     Int       // En jours
-  sellThreshold     Float     // Profit % avant vente
-  stopLoss          Float     // Perte % avant vente
-  sentimentWeight   Float     // 0-1
-  technicalWeight   Float     // 0-1
-  description       String
-  initialBalance    Float     @default(10000)
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  
+  id              String   @id
+  name            String
+  type            String // conservative, balanced, aggressive, contrarian, momentum
+  riskTolerance   Float
+  maxPositionSize Float // Pourcentage
+  holdingPeriod   Int // En jours
+  sellThreshold   Float // Profit % avant vente
+  stopLoss        Float // Perte % avant vente
+  sentimentWeight Float // 0-1
+  technicalWeight Float // 0-1
+  description     String
+  initialBalance  Float    @default(10000)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
   // Relations
-  investments       CryptoInvestment[]
+  investments        CryptoInvestment[]
   portfolioSnapshots CryptoPortfolioSnapshot[]
-  
+
   @@map("investor_profiles")
 }
 
 // Nouvelle table pour les investissements
 model CryptoInvestment {
-  id                String           @id
-  investorId        String
-  coinId            String
-  symbol            String
-  name              String
-  action            String           // BUY, SELL, HOLD
-  amount            Float            // Montant en USD
-  price             Float            // Prix d'achat/vente
-  quantity          Float            // Quantité de crypto
-  timestamp         DateTime         @default(now())
-  reason            String           // Raison de l'investissement
-  gemScore          Float?
-  sentiment         Float?
-  expectedHoldDays  Int
-  targetProfit      Float?
-  stopLoss          Float?
-  
+  id               String   @id
+  investorId       String
+  coinId           String
+  symbol           String
+  name             String
+  action           String // BUY, SELL, HOLD
+  amount           Float // Montant en USD
+  price            Float // Prix d'achat/vente
+  quantity         Float // Quantité de crypto
+  timestamp        DateTime @default(now())
+  reason           String // Raison de l'investissement
+  gemScore         Float?
+  sentiment        Float?
+  expectedHoldDays Int
+  targetProfit     Float?
+  stopLoss         Float?
+
   // Nouveau champ pour indiquer le type de marché (SPOT, MARGIN, FUTURES...)
-  marketType        String           @default("SPOT")
-  
+  marketType String @default("SPOT")
+
   // Métadonnées pour le suivi
-  isExecuted        Boolean          @default(true)
-  executionPrice    Float?           // Prix réel d'exécution
-  fees              Float?           // Frais de transaction
-  notes             String?
-  
+  isExecuted     Boolean @default(true)
+  executionPrice Float? // Prix réel d'exécution
+  fees           Float? // Frais de transaction
+  notes          String?
+
   // Relations
-  investor          InvestorProfile  @relation(fields: [investorId], references: [id])
-  gemProject        CryptoGemProject @relation(fields: [coinId], references: [coinId])
-  
-  @@map("crypto_investments")
+  investor   InvestorProfile  @relation(fields: [investorId], references: [id])
+  gemProject CryptoGemProject @relation(fields: [coinId], references: [coinId])
+
   @@index([investorId])
   @@index([coinId])
   @@index([timestamp])
+  @@map("crypto_investments")
 }
 
 // Nouvelle table pour les snapshots de portefeuille
 model CryptoPortfolioSnapshot {
-  id                    Int                 @id @default(autoincrement())
-  investorId            String
-  timestamp             DateTime            @default(now())
-  totalValue            Float
-  cashBalance           Float
-  totalReturn           Float
-  totalReturnPercent    Float
-  winRate               Float
-  avgWinPercent         Float
-  avgLossPercent        Float
-  maxDrawdown           Float
-  totalTrades           Int
-  winningTrades         Int
-  losingTrades          Int
-  activePositions       Int
-  
+  id                 Int      @id @default(autoincrement())
+  investorId         String
+  timestamp          DateTime @default(now())
+  totalValue         Float
+  cashBalance        Float
+  totalReturn        Float
+  totalReturnPercent Float
+  winRate            Float
+  avgWinPercent      Float
+  avgLossPercent     Float
+  maxDrawdown        Float
+  totalTrades        Int
+  winningTrades      Int
+  losingTrades       Int
+  activePositions    Int
+
   // Relations
-  investor              InvestorProfile     @relation(fields: [investorId], references: [id])
-  positions             CryptoPosition[]
-  
-  @@map("crypto_portfolio_snapshots")
+  investor  InvestorProfile  @relation(fields: [investorId], references: [id])
+  positions CryptoPosition[]
+
   @@index([investorId])
   @@index([timestamp])
+  @@map("crypto_portfolio_snapshots")
 }
 
 // Nouvelle table pour les positions
 model CryptoPosition {
-  id                    Int                      @id @default(autoincrement())
-  snapshotId            Int
-  coinId                String
-  symbol                String
-  name                  String
-  quantity              Float
-  avgBuyPrice           Float
-  currentPrice          Float
-  unrealizedPnL         Float
-  unrealizedPnLPercent  Float
-  daysSinceEntry        Int
-  lastUpdated           DateTime                 @default(now())
-  
+  id                   Int      @id @default(autoincrement())
+  snapshotId           Int
+  coinId               String
+  symbol               String
+  name                 String
+  quantity             Float
+  avgBuyPrice          Float
+  currentPrice         Float
+  unrealizedPnL        Float
+  unrealizedPnLPercent Float
+  daysSinceEntry       Int
+  lastUpdated          DateTime @default(now())
+
   // Relations
-  snapshot              CryptoPortfolioSnapshot  @relation(fields: [snapshotId], references: [id])
-  
-  @@map("crypto_positions")
+  snapshot CryptoPortfolioSnapshot @relation(fields: [snapshotId], references: [id])
+
   @@index([snapshotId])
   @@index([coinId])
+  @@map("crypto_positions")
 }
 
 // Nouvelle table pour les métriques de simulation
@@ -197,71 +197,71 @@ model CryptoSimulationRun {
   worstPerformerName    String?
   worstPerformerReturn  Float?
   avgReturnAllInvestors Float?
-  
+
   // Métadonnées
-  simulationType        String   @default("STANDARD") // STANDARD, PERFORMANCE_TEST, QUICK
-  durationMs            Int?
-  success               Boolean  @default(true)
-  errorMessage          String?
-  
-  @@map("crypto_simulation_runs")
+  simulationType String  @default("STANDARD") // STANDARD, PERFORMANCE_TEST, QUICK
+  durationMs     Int?
+  success        Boolean @default(true)
+  errorMessage   String?
+
   @@index([timestamp])
   @@index([runId])
+  @@map("crypto_simulation_runs")
 }
 
 // Nouvelle table pour les statistiques quotidiennes
 model CryptoDailyStats {
-  id                    Int      @id @default(autoincrement())
-  date                  DateTime @unique
-  totalSimulations      Int      @default(0)
-  totalInvestments      Int      @default(0)
-  totalVolume           Float    @default(0)
-  avgGemsPerSimulation  Float    @default(0)
-  topPerformingCoin     String?
-  topPerformingGain     Float?
-  mostTradedCoin        String?
-  mostTradedVolume      Float?
-  bestInvestor          String?
-  bestInvestorReturn    Float?
-  
-  @@map("crypto_daily_stats")
+  id                   Int      @id @default(autoincrement())
+  date                 DateTime @unique
+  totalSimulations     Int      @default(0)
+  totalInvestments     Int      @default(0)
+  totalVolume          Float    @default(0)
+  avgGemsPerSimulation Float    @default(0)
+  topPerformingCoin    String?
+  topPerformingGain    Float?
+  mostTradedCoin       String?
+  mostTradedVolume     Float?
+  bestInvestor         String?
+  bestInvestorReturn   Float?
+
   @@index([date])
+  @@map("crypto_daily_stats")
 }
 
 // Nouvelle table pour les signaux sociaux (pour partage réseaux sociaux)
 model CryptoSocialSignal {
-  id                    Int      @id @default(autoincrement())
-  signalType            String   // INVESTMENT, PERFORMANCE, ALERT, TREND
-  investorId            String?
-  coinId                String?
-  title                 String
-  content               String
-  hashtags              String?  // JSON array
-  sentiment             String   // POSITIVE, NEGATIVE, NEUTRAL
-  engagement            Int      @default(0)
-  isPublished           Boolean  @default(false)
-  publishedAt           DateTime?
-  platforms             String?  // JSON array: twitter, linkedin, etc.
-  performanceMetrics    String?  // JSON object
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  
-  @@map("crypto_social_signals")
+  id                 Int       @id @default(autoincrement())
+  signalType         String // INVESTMENT, PERFORMANCE, ALERT, TREND
+  investorId         String?
+  coinId             String?
+  title              String
+  content            String
+  hashtags           String? // JSON array
+  sentiment          String // POSITIVE, NEGATIVE, NEUTRAL
+  engagement         Int       @default(0)
+  isPublished        Boolean   @default(false)
+  publishedAt        DateTime?
+  platforms          String? // JSON array: twitter, linkedin, etc.
+  performanceMetrics String? // JSON object
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([signalType])
   @@index([isPublished])
   @@index([createdAt])
+  @@map("crypto_social_signals")
 }
 
 // Table pour les configurations système
 model CryptoSystemConfig {
-  id                    Int      @id @default(autoincrement())
-  configKey             String   @unique
-  configValue           String   // JSON string
-  description           String?
-  isActive              Boolean  @default(true)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  
+  id          Int      @id @default(autoincrement())
+  configKey   String   @unique
+  configValue String // JSON string
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   @@map("crypto_system_configs")
 }
