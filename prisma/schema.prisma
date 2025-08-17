@@ -1,13 +1,13 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-generator client {
-  provider = "prisma-client-js"
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+generator client {
+  provider = "prisma-client-js"
 }
 
 // Table existante pour les gems de CryptoGemHunter
@@ -264,4 +264,25 @@ model CryptoSystemConfig {
   updatedAt   DateTime @updatedAt
 
   @@map("crypto_system_configs")
+}
+
+// Table pour les abonnés à la newsletter
+model NewsletterSubscription {
+  id            Int      @id @default(autoincrement())
+  email         String   @unique
+  isActive      Boolean  @default(true)
+  source        String   @default("web") // web, api, import
+  preferences   String? // JSON object pour les préférences
+  confirmedAt   DateTime?
+  unsubscribedAt DateTime?
+  lastEmailSent DateTime?
+  emailsSent    Int      @default(0)
+  bounced       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("newsletter_subscriptions")
 }

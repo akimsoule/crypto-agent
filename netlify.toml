@@ -1,5 +1,5 @@
 [build]
-  command = "npm install && npm run build && npx prisma migrate deploy && npx prisma generate"
+  command = "./scripts/deploy.sh"
   publish = "dist"
 
 [[redirects]]
@@ -11,3 +11,17 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Configuration des fonctions programmées (scheduled functions)
+[functions]
+  external_node_modules = ["prisma"]
+
+# Note: Les scheduled functions peuvent être configurées via l'interface Netlify
+# ou via des webhooks externes comme GitHub Actions / Zapier
+# 
+# Exemples de scheduling:
+# - Newsletter: Tous les lundis à 9h UTC 
+# - Gem Hunter: Toutes les 4 heures
+# - Investor Watch: Toutes les 2 heures  
+# - Monitoring: Tous les jours à minuit UTC
+# - Cleanup: Tous les dimanches à 2h UTC
