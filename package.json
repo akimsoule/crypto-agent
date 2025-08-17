@@ -25,7 +25,9 @@
     "test-facebook": "tsx netlify/test/testFacebookToken.ts",
     "check-facebook": "tsx scripts/checkFacebookConfig.ts",
     "update-facebook-token": "tsx scripts/updateFacebookToken.ts",
-    "test-resend-templates": "tsx scripts/test-resend-templates.ts"
+    "test-resend-templates": "tsx scripts/test-resend-templates.ts",
+    "dev:enable-test-functions": "cp netlify/functions-dev/*.mts netlify/functions/",
+    "dev:disable-test-functions": "rm -f netlify/functions/test-*.mts netlify/functions/seed-database.mts"
   },
   "dependencies": {
     "@netlify/functions": "^3.1.10",

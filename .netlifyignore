@@ -1,0 +1,63 @@
+# Fichiers et dossiers à ignorer lors du déploiement Netlify
+
+# Fonctions de développement uniquement
+netlify/functions-dev/
+
+# Node modules (déjà géré par external_node_modules)
+node_modules/
+
+# Fichiers de développement
+.env
+.env.local
+.env.development
+.env.test
+
+# Tests
+test/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+vitest.config.ts
+
+# Scripts de développement
+scripts/test-*.ts
+scripts/validate-env.ts
+
+# Documentation
+docs/
+README.md
+*.md
+
+# Configuration de développement
+eslint.config.js
+tsconfig.*.json
+vite.config.ts
+postcss.config.cjs
+tailwind.config.cjs
+
+# Fichiers de build temporaires
+dist/
+.netlify/
+.vite/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.cache/
+.parcel-cache/

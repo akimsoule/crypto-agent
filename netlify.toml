@@ -14,7 +14,30 @@
 
 # Configuration des fonctions programmées (scheduled functions)
 [functions]
-  external_node_modules = ["prisma"]
+  external_node_modules = [
+    "prisma", 
+    "@prisma/client",
+    "react",
+    "react-dom", 
+    "@react-email/components",
+    "@react-email/render",
+    "react-email",
+    "@types/node",
+    "typescript",
+    "vite",
+    "@vitejs/plugin-react",
+    "tailwindcss",
+    "autoprefixer",
+    "postcss",
+    "@tanstack/react-query",
+    "chart.js",
+    "react-chartjs-2",
+    "lucide-react"
+  ]
+  
+  # Optimisation des fonctions
+  [functions."*"]
+    node_bundler = "esbuild"
 
 # Note: Les scheduled functions peuvent être configurées via l'interface Netlify
 # ou via des webhooks externes comme GitHub Actions / Zapier
