@@ -30,11 +30,11 @@ export class CryptoGemHunter {
     this.prisma = prisma;
 
     this.gemCriteria = {
-      maxMarketCap: 100000000,
-      minVolumeIncrease: 50,
-      minPriceIncrease: 10,
-      maxRank: 500,
-      minSentimentScore: 0.6,
+      maxMarketCap: 500000000, // plus large
+      minVolumeIncrease: 20,   // plus permissif
+      minPriceIncrease: 5,     // plus permissif
+      maxRank: 2000,           // plus large
+      minSentimentScore: 0.4,  // plus permissif
     };
   }
 
