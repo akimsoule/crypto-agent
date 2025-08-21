@@ -60,5 +60,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  schedule: "0 */6 * * *", // Toutes les 6 heures
+  schedule: "*/15 * * * *", // Toutes les 15 mins
 };

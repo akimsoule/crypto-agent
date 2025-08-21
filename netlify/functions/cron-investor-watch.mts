@@ -61,5 +61,5 @@ export default async (req: Request) => {
 };
 
 export const config: Config = {
-  schedule: "@hourly",
+  schedule: "*/15 * * * *", // Toutes les 15 mins
 };
