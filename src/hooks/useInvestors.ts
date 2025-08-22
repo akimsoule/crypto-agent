@@ -70,21 +70,23 @@ export function useInvestors() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchInvestors() {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch('/api/investors');
-        if (!response.ok) throw new Error('Erreur lors du chargement des investisseurs');
-        const data: {success : boolean, data: Investor[]} = await response.json();
-        setInvestors(data.data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erreur inconnue');
-      } finally {
-        setLoading(false);
-      }
+  // Fonction pour charger les investisseurs
+  const fetchInvestors = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/investors');
+      if (!response.ok) throw new Error('Erreur lors du chargement des investisseurs');
+      const data: {success : boolean, data: Investor[]} = await response.json();
+      setInvestors(data.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchInvestors();
   }, []);
 
@@ -105,5 +107,6 @@ export function useInvestors() {
     }
   };
 
-  return { investors, loading, error, getInvestorDetail };
+  // Ajout de la fonction refetch pour recharger les investisseurs
+  return { investors, loading, error, getInvestorDetail, refetch: fetchInvestors };
 }
