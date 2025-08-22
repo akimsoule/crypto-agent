@@ -55,61 +55,48 @@ export default function Index() {
           </p>
         </div>
 
-        {/* Statistiques dynamiques + bouton actualiser */}
-        <div className="flex items-center justify-between mb-6 sm:mb-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 flex-1">
+        {/* Statistiques dynamiques */}
+        <div className="mb-4 sm:mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="card bg-base-100 shadow-lg">
               <div className="card-body p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-bold text-primary">
-                  {activeCount}
-                </div>
-                <div className="text-xs sm:text-sm text-base-content/70">
-                  Investisseurs actifs
-                </div>
+                <div className="text-xl sm:text-2xl font-bold text-primary">{activeCount}</div>
+                <div className="text-xs sm:text-sm text-base-content/70">Investisseurs actifs</div>
               </div>
             </div>
             <div className="card bg-base-100 shadow-lg">
               <div className="card-body p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-bold text-success">
-                  {avgGain >= 0 ? "+" : ""}
-                  {avgGain.toFixed(1)}%
-                </div>
-                <div className="text-xs sm:text-sm text-base-content/70">
-                  Gains moyens
-                </div>
+                <div className="text-xl sm:text-2xl font-bold text-success">{avgGain >= 0 ? "+" : ""}{avgGain.toFixed(1)}%</div>
+                <div className="text-xs sm:text-sm text-base-content/70">Gains moyens</div>
               </div>
             </div>
             <div className="card bg-base-100 shadow-lg">
               <div className="card-body p-3 sm:p-4 text-center">
-                <div className="text-xl sm:text-2xl font-bold">
-                  {totalPositions}
-                </div>
-                <div className="text-xs sm:text-sm text-base-content/70">
-                  Positions actives
-                </div>
+                <div className="text-xl sm:text-2xl font-bold">{totalPositions}</div>
+                <div className="text-xs sm:text-sm text-base-content/70">Positions actives</div>
               </div>
             </div>
             <div className="card bg-base-100 shadow-lg">
               <div className="card-body p-3 sm:p-4 text-center">
                 <div className="text-sm font-bold">{lastAnalysis}</div>
-                <div className="text-xs text-base-content/70">
-                  Dernière analyse
-                </div>
+                <div className="text-xs text-base-content/70">Dernière analyse</div>
               </div>
             </div>
           </div>
-          <button
-            className="btn btn-outline btn-sm ml-4"
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-          >
-            {refreshing ? (
-              <span className="loading loading-spinner loading-xs mr-2"></span>
-            ) : (
-              <span className="mr-2">🔄</span>
-            )}
-            Actualiser
-          </button>
+          <div className="flex justify-center mt-4">
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={handleRefresh}
+              disabled={refreshing || loading}
+            >
+              {refreshing ? (
+                <span className="loading loading-spinner loading-xs mr-2"></span>
+              ) : (
+                <span className="mr-2">🔄</span>
+              )}
+              Actualiser
+            </button>
+          </div>
         </div>
 
         {/* Layout principal */}
