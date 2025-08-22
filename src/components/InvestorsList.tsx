@@ -30,12 +30,16 @@ const getLastTradeInfo = (investments: Investor['investments']): string => {
   if (diffHours > 0) return `Il y a ${diffHours}h`
   return 'Récent'
 }
-
+const pageSize = 8;
 export default function InvestorsList() {
   const { investors, loading, error, getInvestorDetail } = useInvestors()
   const { error: showError } = useToast()
   const [selectedInvestor, setSelectedInvestor] = useState<Investor | null>(null)
   const [loadingInvestorId, setLoadingInvestorId] = useState<string | null>(null)
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const totalPages = Math.ceil(investors.length / pageSize)
+  const paginatedInvestors = investors.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const handleViewDetails = async (investorId: string) => {
     try {
@@ -91,14 +95,14 @@ export default function InvestorsList() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6">
-        {investors.map((investor, index) => {
+        {paginatedInvestors.map((investor, index) => {
           const latestSnapshot = investor.portfolioSnapshots[0]
           const totalReturn = latestSnapshot?.totalReturnPercent || 0
           const winRate = latestSnapshot?.winRate || 0
           const activePositions = latestSnapshot?.activePositions || 0
           const lastTrade = getLastTradeInfo(investor.investments)
           const avatar = getInvestorAvatar(investor.type)
-          
+          const globalIndex = (currentPage - 1) * pageSize + index
           return (
             <div key={investor.id} className="card bg-base-100 shadow-lg hover:shadow-xl transition-all">
               <div className="card-body p-4 sm:p-6">
@@ -112,7 +116,7 @@ export default function InvestorsList() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="flex items-center text-sm text-base-content/70">
-                      <span className="mr-1">#{index + 1}</span>
+                      <span className="mr-1">#{globalIndex + 1}</span>
                       <Activity className="w-4 h-4" />
                     </div>
                   </div>
@@ -188,6 +192,27 @@ export default function InvestorsList() {
           )
         })}
       </div>
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-4 mt-6">
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+          >
+            Précédent
+          </button>
+          <span className="text-sm">Page {currentPage} / {totalPages}</span>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Suivant
+          </button>
+        </div>
+      )}
 
       <div className="text-center">
         <p className="text-sm text-base-content/60">
