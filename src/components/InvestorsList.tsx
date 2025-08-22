@@ -30,7 +30,8 @@ const getLastTradeInfo = (investments: Investor['investments']): string => {
   if (diffHours > 0) return `Il y a ${diffHours}h`
   return 'Récent'
 }
-const pageSize = 8;
+// Pagination configurable
+const DEFAULT_PAGE_SIZE = 4;
 export default function InvestorsList() {
   const { investors, loading, error, getInvestorDetail } = useInvestors()
   const { error: showError } = useToast()
@@ -38,6 +39,7 @@ export default function InvestorsList() {
   const [loadingInvestorId, setLoadingInvestorId] = useState<string | null>(null)
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const totalPages = Math.ceil(investors.length / pageSize)
   const paginatedInvestors = investors.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
@@ -89,8 +91,27 @@ export default function InvestorsList() {
     <div className="space-y-6">
       <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
         <h2 className="text-xl sm:text-2xl font-bold">🤖 Nos Investisseurs IA</h2>
-        <div className="badge badge-primary badge-lg self-start sm:self-auto">
-          {investors.length} Actifs
+        <div className="flex items-center gap-4">
+          <div className="badge badge-primary badge-lg self-start sm:self-auto">
+            {investors.length} Actifs
+          </div>
+          <div className="form-control">
+            <label className="label cursor-pointer gap-2">
+              <span className="label-text text-xs">Par page :</span>
+              <select
+                className="select select-bordered select-xs"
+                value={pageSize}
+                onChange={e => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1); // reset page
+                }}
+              >
+                {[4, 8, 12, 16, 24].map(size => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
       </div>
 
