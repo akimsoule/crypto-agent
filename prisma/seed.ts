@@ -51,33 +51,27 @@ async function seedSystemConfig() {
 async function seedInvestorProfiles() {
   console.log('👥 Seeding investor profiles...');
 
-  // Vérifier si des investisseurs existent déjà
-  const existingInvestors = await prisma.investorProfile.count();
-
-  if (existingInvestors > 0) {
-    console.log(`ℹ️ ${existingInvestors} profils d'investisseurs déjà présents`);
-    return;
-  }
-
-  // Créer les profils par défaut
+  // Créer ou mettre à jour tous les profils de la factory
   const defaultProfiles = InvestorProfileFactory.createProfiles();
-  console.log(`📝 Création de ${defaultProfiles.length} profils d'investisseurs...`);
+  console.log(`📝 Synchronisation de ${defaultProfiles.length} profils d'investisseurs...`);
 
-  let createdCount = 0;
+  let upsertedCount = 0;
 
   for (const profile of defaultProfiles) {
     try {
-      await prisma.investorProfile.create({
-        data: profile,
+      await prisma.investorProfile.upsert({
+        where: { id: profile.id },
+        update: profile,
+        create: profile,
       });
-      createdCount++;
-      console.log(`✅ Profil créé: ${profile.name} (${profile.type})`);
+      upsertedCount++;
+      console.log(`✅ Profil synchronisé: ${profile.name} (${profile.type})`);
     } catch (error) {
-      console.error(`❌ Erreur lors de la création du profil ${profile.name}:`, error);
+      console.error(`❌ Erreur lors de la synchronisation du profil ${profile.name}:`, error);
     }
   }
 
-  console.log(`🎯 ${createdCount}/${defaultProfiles.length} profils d'investisseurs créés`);
+  console.log(`🎯 ${upsertedCount}/${defaultProfiles.length} profils d'investisseurs synchronisés`);
 }
 
 async function seedCryptoGemState() {

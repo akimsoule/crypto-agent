@@ -47,7 +47,7 @@ export interface Trade {
 // Factory pour créer les profils d'investisseurs prédéfinis
 export class InvestorProfileFactory {
   static createProfiles(): InvestorProfileInput[] {
-    return [
+  return [
       {
         id: "conservative_bob",
         name: "Bob le Conservateur",
@@ -60,6 +60,96 @@ export class InvestorProfileFactory {
         sentimentWeight: 0.2,
         technicalWeight: 0.8,
         description: "Investisseur prudent qui privilégie la préservation du capital",
+        initialBalance: 10000,
+        isActive: true
+      },
+      {
+        id: "trend_sniper",
+        name: "Nina la Trend Sniper",
+        type: "trend_sniper",
+        riskTolerance: 0.85,
+        maxPositionSize: 18,
+        holdingPeriod: 5,
+        sellThreshold: 20,
+        stopLoss: 10,
+        sentimentWeight: 0.5,
+        technicalWeight: 0.9,
+        description: "Investisseuse ultra-réactive qui ne prend que les cryptos avec une forte tendance haussière sur 24h et volume explosif.",
+        initialBalance: 10000,
+        isActive: true
+      },
+      {
+        id: "stable_seeker",
+        name: "Paul le Stable Seeker",
+        type: "stable_seeker",
+        riskTolerance: 0.4,
+        maxPositionSize: 25,
+        holdingPeriod: 60,
+        sellThreshold: 8,
+        stopLoss: 5,
+        sentimentWeight: 0.1,
+        technicalWeight: 0.9,
+        description: "Investisseur qui ne prend que les cryptos avec une faible volatilité et un market cap > 500M$.",
+        initialBalance: 10000,
+        isActive: true
+      },
+      {
+        id: "degen_max",
+        name: "Max le Degen",
+        type: "degen",
+        riskTolerance: 1.0,
+        maxPositionSize: 5,
+        holdingPeriod: 2,
+        sellThreshold: 100,
+        stopLoss: 40,
+        sentimentWeight: 0.7,
+        technicalWeight: 0.3,
+        description: "Investisseur extrême qui ne prend que les cryptos ultra-volatiles, microcaps et pumpés sur 24h.",
+        initialBalance: 10000,
+        isActive: true
+      },
+      {
+        id: "microcap_hunter",
+        name: "Milo le Microcap",
+        type: "microcap",
+        riskTolerance: 0.95,
+        maxPositionSize: 10,
+        holdingPeriod: 7,
+        sellThreshold: 60,
+        stopLoss: 25,
+        sentimentWeight: 0.2,
+        technicalWeight: 0.8,
+        description: "Chasseur de microcaps, ne prend que les cryptos avec market cap < 10M$.",
+        initialBalance: 10000,
+        isActive: true
+      },
+      {
+        id: "sentiment_guru",
+        name: "Sophie la Sentiment Guru",
+        type: "sentiment",
+        riskTolerance: 0.7,
+        maxPositionSize: 20,
+        holdingPeriod: 10,
+        sellThreshold: 30,
+        stopLoss: 10,
+        sentimentWeight: 1.0,
+        technicalWeight: 0.0,
+        description: "Investisseuse qui ne prend que les cryptos avec un score de sentiment > 0.8.",
+        initialBalance: 10000,
+        isActive: true
+      },
+      {
+        id: "ath_rebounder",
+        name: "Alex l'ATH Rebounder",
+        type: "ath_rebound",
+        riskTolerance: 0.8,
+        maxPositionSize: 15,
+        holdingPeriod: 14,
+        sellThreshold: 40,
+        stopLoss: 15,
+        sentimentWeight: 0.3,
+        technicalWeight: 0.7,
+        description: "Investisseur qui cible les cryptos loin de leur ATH pour jouer le rebond.",
         initialBalance: 10000,
         isActive: true
       },
