@@ -7,10 +7,16 @@ import { useToast } from '../hooks/useToast'
 const getInvestorAvatar = (type: string): string => {
   const avatars: Record<string, string> = {
     conservative: '🟢',
-    balanced: '🔵', 
+    trend_sniper: '🎯',
+    stable_seeker: '🛡️',
+    degen: '🤪',
+    microcap: '🦐',
+    sentiment: '💬',
+    ath_rebound: '📈',
+    balanced: '🔵',
     aggressive: '🔴',
-    momentum: '🟡',
-    contrarian: '🟣'
+    momentum: '⚡',
+    contrarian: '�'
   }
   return avatars[type] || '⚪'
 }

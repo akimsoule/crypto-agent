@@ -40,6 +40,7 @@
     "@types/node": "^22.17.1",
     "axios": "^1.11.0",
     "chart.js": "^4.4.0",
+    "indicatorts": "^2.2.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.539.0",
     "react": "^19.1.1",

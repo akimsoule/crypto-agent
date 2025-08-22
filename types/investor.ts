@@ -1,15 +1,31 @@
 // Types liés aux investisseurs
-import type { InvestorProfile, CryptoInvestment, CryptoPosition, CryptoPortfolioSnapshot } from '@prisma/client';
+import type {
+  InvestorProfile,
+  CryptoInvestment,
+  CryptoPosition,
+  CryptoPortfolioSnapshot,
+} from "@prisma/client";
 
 // Type pour créer un InvestorProfile (sans les champs générés automatiquement)
-export type InvestorProfileInput = Omit<InvestorProfile, 'createdAt' | 'updatedAt'>;
+export type InvestorProfileInput = Omit<
+  InvestorProfile,
+  "createdAt" | "updatedAt"
+>;
 
 // Utilisation des types Prisma existants pour Investment (utiliser CryptoInvestment)
 // On exclut les relations car elles ne sont pas sérialisées en JSON
-export type Investment = Omit<CryptoInvestment, 'investor' | 'gemProject'>;
+export type Investment = Omit<CryptoInvestment, "investor" | "gemProject">;
 
 // Type pour créer un Investment (sans les champs générés automatiquement et les relations)
-export type InvestmentInput = Omit<Investment, 'timestamp' | 'isExecuted' | 'executionPrice' | 'fees' | 'notes' | 'marketType'>;
+export type InvestmentInput = Omit<
+  Investment,
+  | "timestamp"
+  | "isExecuted"
+  | "executionPrice"
+  | "fees"
+  | "notes"
+  | "marketType"
+>;
 
 // Utiliser le type Prisma pour Portfolio avec relations chargées
 export type Portfolio = CryptoPortfolioSnapshot & {
@@ -20,16 +36,17 @@ export type Portfolio = CryptoPortfolioSnapshot & {
 export type Position = CryptoPosition;
 
 // Type pour les métriques de performance (extrait de CryptoPortfolioSnapshot)
-export type PerformanceMetrics = Pick<CryptoPortfolioSnapshot, 
-  | 'totalReturn' 
-  | 'totalReturnPercent' 
-  | 'winRate' 
-  | 'avgWinPercent' 
-  | 'avgLossPercent' 
-  | 'maxDrawdown' 
-  | 'totalTrades' 
-  | 'winningTrades' 
-  | 'losingTrades'
+export type PerformanceMetrics = Pick<
+  CryptoPortfolioSnapshot,
+  | "totalReturn"
+  | "totalReturnPercent"
+  | "winRate"
+  | "avgWinPercent"
+  | "avgLossPercent"
+  | "maxDrawdown"
+  | "totalTrades"
+  | "winningTrades"
+  | "losingTrades"
 >;
 
 export interface Trade {
@@ -47,7 +64,7 @@ export interface Trade {
 // Factory pour créer les profils d'investisseurs prédéfinis
 export class InvestorProfileFactory {
   static createProfiles(): InvestorProfileInput[] {
-  return [
+    return [
       {
         id: "conservative_bob",
         name: "Bob le Conservateur",
@@ -59,9 +76,10 @@ export class InvestorProfileFactory {
         stopLoss: 8, // Stop loss à -8%
         sentimentWeight: 0.2,
         technicalWeight: 0.8,
-        description: "Investisseur prudent qui privilégie la préservation du capital",
+        description:
+          "Investisseur prudent qui privilégie la préservation du capital",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "trend_sniper",
@@ -74,9 +92,10 @@ export class InvestorProfileFactory {
         stopLoss: 10,
         sentimentWeight: 0.5,
         technicalWeight: 0.9,
-        description: "Investisseuse ultra-réactive qui ne prend que les cryptos avec une forte tendance haussière sur 24h et volume explosif.",
+        description:
+          "Investisseuse ultra-réactive qui ne prend que les cryptos avec une forte tendance haussière sur 24h et volume explosif.",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "stable_seeker",
@@ -89,9 +108,10 @@ export class InvestorProfileFactory {
         stopLoss: 5,
         sentimentWeight: 0.1,
         technicalWeight: 0.9,
-        description: "Investisseur qui ne prend que les cryptos avec une faible volatilité et un market cap > 500M$.",
+        description:
+          "Investisseur qui ne prend que les cryptos avec une faible volatilité et un market cap > 500M$.",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "degen_max",
@@ -104,9 +124,10 @@ export class InvestorProfileFactory {
         stopLoss: 40,
         sentimentWeight: 0.7,
         technicalWeight: 0.3,
-        description: "Investisseur extrême qui ne prend que les cryptos ultra-volatiles, microcaps et pumpés sur 24h.",
+        description:
+          "Investisseur extrême qui ne prend que les cryptos ultra-volatiles, microcaps et pumpés sur 24h.",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "microcap_hunter",
@@ -119,9 +140,10 @@ export class InvestorProfileFactory {
         stopLoss: 25,
         sentimentWeight: 0.2,
         technicalWeight: 0.8,
-        description: "Chasseur de microcaps, ne prend que les cryptos avec market cap < 10M$.",
+        description:
+          "Chasseur de microcaps, ne prend que les cryptos avec market cap < 10M$.",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "sentiment_guru",
@@ -134,9 +156,10 @@ export class InvestorProfileFactory {
         stopLoss: 10,
         sentimentWeight: 1.0,
         technicalWeight: 0.0,
-        description: "Investisseuse qui ne prend que les cryptos avec un score de sentiment > 0.8.",
+        description:
+          "Investisseuse qui ne prend que les cryptos avec un score de sentiment > 0.8.",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "ath_rebounder",
@@ -149,9 +172,10 @@ export class InvestorProfileFactory {
         stopLoss: 15,
         sentimentWeight: 0.3,
         technicalWeight: 0.7,
-        description: "Investisseur qui cible les cryptos loin de leur ATH pour jouer le rebond.",
+        description:
+          "Investisseur qui cible les cryptos loin de leur ATH pour jouer le rebond.",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "balanced_alice",
@@ -164,9 +188,10 @@ export class InvestorProfileFactory {
         stopLoss: 12,
         sentimentWeight: 0.4,
         technicalWeight: 0.6,
-        description: "Investisseuse équilibrée qui combine croissance et stabilité",
+        description:
+          "Investisseuse équilibrée qui combine croissance et stabilité",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "aggressive_charlie",
@@ -181,7 +206,7 @@ export class InvestorProfileFactory {
         technicalWeight: 0.7,
         description: "Investisseur agressif en quête de gains importants",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "momentum_diana",
@@ -196,7 +221,7 @@ export class InvestorProfileFactory {
         technicalWeight: 0.4,
         description: "Investisseuse qui suit les tendances et le momentum",
         initialBalance: 10000,
-        isActive: true
+        isActive: true,
       },
       {
         id: "contrarian_erik",
@@ -209,10 +234,43 @@ export class InvestorProfileFactory {
         stopLoss: 18,
         sentimentWeight: 0.8,
         technicalWeight: 0.2,
-        description: "Investisseur contrarian qui achète quand les autres vendent",
+        description:
+          "Investisseur contrarian qui achète quand les autres vendent",
         initialBalance: 10000,
-        isActive: true
-      }
+        isActive: true,
+      },
+      {
+        id: "macd_master",
+        name: "Marc le MACD Master",
+        type: "macd_master",
+        riskTolerance: 0.75,
+        maxPositionSize: 20,
+        holdingPeriod: 5,
+        sellThreshold: 18,
+        stopLoss: 7,
+        sentimentWeight: 0.2,
+        technicalWeight: 1.0,
+        description:
+          "Trade uniquement les cryptos du top 10 par market cap en suivant les signaux MACD (cross, divergence, etc.)",
+        initialBalance: 10000,
+        isActive: true,
+      },
+      {
+        id: "envelope_strategist",
+        name: "Eva l'Envelope Strategist",
+        type: "envelope_strategist",
+        riskTolerance: 0.65,
+        maxPositionSize: 15,
+        holdingPeriod: 3,
+        sellThreshold: 10,
+        stopLoss: 5,
+        sentimentWeight: 0.1,
+        technicalWeight: 0.95,
+        description:
+          "Utilise la stratégie d'enveloppe sur les cryptos les plus liquides pour détecter les points d'entrée/sortie.",
+        initialBalance: 10000,
+        isActive: true,
+      },
     ];
   }
 }
