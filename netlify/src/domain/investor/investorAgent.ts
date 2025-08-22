@@ -67,6 +67,13 @@ export class InvestorAgent {
       const decision = this.shouldSell(position);
 
       if (decision.shouldSell) {
+        // Vérifier le cooldown pour éviter les ventes répétitives
+        const cooldownCheck = await this.isTokenInCooldown(position.coinId, 'SELL');
+        if (cooldownCheck.inCooldown) {
+          console.log(`${this.profile.name}: ${cooldownCheck.reason} - vente annulée`);
+          continue; // Passer à la position suivante
+        }
+
         const sellInvestment: Investment = {
           id: this.generateId(),
           investorId: this.profile.id,
@@ -200,7 +207,7 @@ export class InvestorAgent {
       const availableCash = this.portfolio.cashBalance;
       if (availableCash < 100) break; // Minimum $100 pour investir
 
-      const shouldBuy = this.shouldBuy(gem);
+      const shouldBuy = await this.shouldBuy(gem);
 
       if (shouldBuy.shouldBuy) {
         const investmentAmount = Math.min(
@@ -251,6 +258,9 @@ export class InvestorAgent {
           daysSinceEntry: 0,
           lastUpdated: new Date(),
         });
+      } else {
+        // Log quand un achat est refusé pour comprendre pourquoi
+        console.log(`${this.profile.name}: Achat refusé pour ${gem.symbol} - ${shouldBuy.reason}`);
       }
     }
 
@@ -311,13 +321,120 @@ export class InvestorAgent {
     return Math.max(0, Math.min(100, score));
   }
 
-  public shouldBuy(gem: CryptoProject): { shouldBuy: boolean; reason: string } {
+  // Nouvelle méthode pour vérifier si un token est en cooldown
+  private async isTokenInCooldown(coinId: string, action: 'BUY' | 'SELL'): Promise<{ inCooldown: boolean; reason?: string }> {
+    try {
+      // Vérifier les transactions récentes (dernières 4 heures pour éviter les actions répétitives)
+      const cooldownHours = 4;
+      const cutoffTime = new Date(Date.now() - cooldownHours * 60 * 60 * 1000);
+      
+      // Vérifier aussi les transactions de la journée pour limiter la fréquence
+      const todayCutoff = new Date();
+      todayCutoff.setHours(0, 0, 0, 0); // Début de la journée
+
+      const recentInvestments = await this.prisma.cryptoInvestment.findMany({
+        where: {
+          investorId: this.profile.id,
+          coinId: coinId,
+          timestamp: {
+            gte: cutoffTime
+          }
+        },
+        orderBy: {
+          timestamp: 'desc'
+        },
+        take: 5 // Vérifier les 5 dernières actions sur ce token
+      });
+
+      const todayInvestments = await this.prisma.cryptoInvestment.findMany({
+        where: {
+          investorId: this.profile.id,
+          coinId: coinId,
+          timestamp: {
+            gte: todayCutoff
+          }
+        }
+      });
+
+      // Limite quotidienne : max 3 transactions par token par jour
+      if (todayInvestments.length >= 3) {
+        return { 
+          inCooldown: true, 
+          reason: `Limite quotidienne atteinte: ${todayInvestments.length} transactions sur ${coinId} aujourd'hui` 
+        };
+      }
+
+      if (recentInvestments.length === 0) {
+        return { inCooldown: false };
+      }
+
+      // Si la dernière action était la même que celle proposée, c'est suspect
+      const lastAction = recentInvestments[0];
+      if (lastAction.action === action) {
+        const timeSinceLastAction = Date.now() - lastAction.timestamp.getTime();
+        const hoursSince = timeSinceLastAction / (1000 * 60 * 60);
+        
+        if (hoursSince < cooldownHours) {
+          return { 
+            inCooldown: true, 
+            reason: `Cooldown: ${action} sur ${coinId} il y a ${hoursSince.toFixed(1)}h` 
+          };
+        }
+      }
+
+      // Vérifier les patterns suspects (achat-vente-achat rapide)
+      if (recentInvestments.length >= 2 && action === 'BUY') {
+        const last = recentInvestments[0];
+        const secondLast = recentInvestments[1];
+        
+        if (last.action === 'SELL' && secondLast.action === 'BUY') {
+          const timeBetweenActions = last.timestamp.getTime() - secondLast.timestamp.getTime();
+          const hoursBetween = timeBetweenActions / (1000 * 60 * 60);
+          
+          if (hoursBetween < 2) { // Achat-vente-achat en moins de 2h = suspect
+            return { 
+              inCooldown: true, 
+              reason: `Pattern suspect: achat-vente-achat rapide sur ${coinId}` 
+            };
+          }
+        }
+      }
+
+      // Vérifier si on fait trop de transactions sur le même token
+      if (recentInvestments.length >= 3) {
+        const firstTransaction = recentInvestments[recentInvestments.length - 1];
+        const timeSpan = Date.now() - firstTransaction.timestamp.getTime();
+        const hoursSpan = timeSpan / (1000 * 60 * 60);
+        
+        if (hoursSpan < 6) { // Plus de 3 transactions en moins de 6h = suspect
+          return { 
+            inCooldown: true, 
+            reason: `Trop d'activité: ${recentInvestments.length} transactions sur ${coinId} en ${hoursSpan.toFixed(1)}h` 
+          };
+        }
+      }
+
+      return { inCooldown: false };
+    } catch (error) {
+      console.error(`Erreur lors de la vérification du cooldown pour ${coinId}:`, error);
+      // En cas d'erreur, on n'applique pas de cooldown pour ne pas bloquer les transactions
+      return { inCooldown: false };
+    }
+  }
+
+  public async shouldBuy(gem: CryptoProject): Promise<{ shouldBuy: boolean; reason: string }> {
     // Vérifier si on a déjà cette crypto
     const existingPosition = this.portfolio.positions.find(
       (p) => p.coinId === gem.id
     );
     if (existingPosition) {
       return { shouldBuy: false, reason: "Position déjà existante" };
+    }
+
+    // Vérifier le cooldown pour éviter les actions répétitives
+    const cooldownCheck = await this.isTokenInCooldown(gem.id, 'BUY');
+    if (cooldownCheck.inCooldown) {
+      return { shouldBuy: false, reason: cooldownCheck.reason || "Token en cooldown" };
     }
 
     // Vérifier les critères minimum

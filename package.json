@@ -23,6 +23,7 @@
     "env:validate": "tsx scripts/validate-env.ts",
     "env:check": "npm run env:validate",
     "gem-hunter": "tsx scripts/runGemHunter.ts",
+    "test-cooldown": "tsx scripts/test-investor-cooldown.ts",
     "test-facebook": "tsx netlify/test/testFacebookToken.ts",
     "check-facebook": "tsx scripts/checkFacebookConfig.ts",
     "update-facebook-token": "tsx scripts/updateFacebookToken.ts",
