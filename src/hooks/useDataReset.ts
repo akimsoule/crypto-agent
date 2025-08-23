@@ -60,7 +60,8 @@ export const useDataReset = () => {
       if (options.portfolios) params.append('portfolios', 'true');
       if (options.all) params.append('all', 'true');
 
-      const url = `/.netlify/functions/reset-data?${params.toString()}`;
+      // Utiliser la version allégée de l'endpoint
+      const url = `/.netlify/functions/reset-data-lite?${params.toString()}`;
       
       const response = await fetch(url, {
         method: 'POST',

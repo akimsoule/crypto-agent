@@ -25,6 +25,10 @@ npx prisma generate
 echo "🔧 Optimisation des fonctions Netlify..."
 ./scripts/optimize-functions.sh
 
+# 5b. Préparation de la fonction lite reset-data
+echo "🔧 Préparation de la fonction allégée reset-data-lite..."
+./scripts/prepare-lite-function.sh
+
 # 6. Seed de la base de données (avec gestion d'erreur gracieuse)
 echo "🌱 Seeding de la base de données..."
 if npm run db:seed; then
