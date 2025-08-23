@@ -1,4 +1,3 @@
-import { PrismaClient } from "@prisma/client";
 import { CryptoGemHunter } from "../../domain/crypto/cryptoGemHunter";
 import SocialMediaManager from "../../infrastructure/external/socialMediaManager";
 import type { CronExecutionResult } from "./types";
@@ -6,7 +5,7 @@ import type { CronExecutionResult } from "./types";
 /**
  * Exécute la tâche de recherche de gems crypto
  */
-export async function executeGemHunter(_prisma?: PrismaClient): Promise<CronExecutionResult> {
+export async function executeGemHunter(): Promise<CronExecutionResult> {
   const startTime = Date.now();
   const runId = `gem-hunter-${startTime}`;
 

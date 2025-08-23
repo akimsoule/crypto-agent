@@ -1,7 +1,7 @@
 import type { Context } from "@netlify/functions";
 import { PrismaClient } from '@prisma/client';
 import { InvestorProfileFactory } from '../../types/investor';
-import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
+import { withDashboardAuth } from "../functions/middleware/dashBoardMiddleware.mts";
 
 const prisma = new PrismaClient();
 

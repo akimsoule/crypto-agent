@@ -1,7 +1,7 @@
 import { Context } from '@netlify/functions'
-import { withDashboardAuth } from './middleware/dashBoardMiddleware.mts';
 import { NewsletterService } from '../src/services/NewsletterService.ts';
 import { HttpService } from '../src/services/HttpService.ts';
+import { withDashboardAuth } from '../functions/middleware/dashBoardMiddleware.mts';
 
 interface TestEmailRequest {
   to_email: string;
