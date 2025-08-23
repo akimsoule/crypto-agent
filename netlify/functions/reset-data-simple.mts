@@ -1,15 +1,15 @@
-import type { Context } from "@netlify/functions";
-import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
 import { Pool } from 'pg';
+import type { Context } from "@netlify/functions";
 
 /**
- * Version allégée de l'endpoint pour réinitialiser les données des investisseurs et des gems
- * Utilise directement SQL plutôt que Prisma pour réduire la taille de la fonction
+ * Version ultra simplifiée de reset-data
+ * Utilise uniquement pg et évite toute autre dépendance
  */
 export const handler = async (req: Request, context: Context) => {
+  // Vérification simple de la méthode HTTP
   if (req.method !== 'POST') {
     return new Response(
-      JSON.stringify({ error: "Méthode non autorisée. Utilisez POST." }),
+      JSON.stringify({ error: "Méthode non autorisée" }),
       { status: 405, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -23,6 +23,7 @@ export const handler = async (req: Request, context: Context) => {
       all: url.searchParams.get('all') === 'true'
     };
 
+    // Validation des options
     if (!options.investors && !options.gems && !options.portfolios && !options.all) {
       return new Response(
         JSON.stringify({ 
@@ -32,7 +33,7 @@ export const handler = async (req: Request, context: Context) => {
       );
     }
 
-    // Statistiques des suppressions
+    // Stats pour le suivi
     const stats = {
       investments: 0,
       positions: 0,
@@ -42,51 +43,51 @@ export const handler = async (req: Request, context: Context) => {
       alerts: 0
     };
     
-    // Connexion directe à la base de données
+    // Connexion directe à PostgreSQL
     const pool = new Pool({
       connectionString: process.env.DATABASE_URL
     });
     
     try {
-      // Utilisation de SQL brut pour éviter de charger Prisma
+      // Exécution des requêtes SQL directement
       
-      // Toujours supprimer les investissements en premier (contrainte de clé étrangère)
+      // Suppression des investissements
       if (options.investors || options.all) {
-        const { rowCount: investmentsCount } = await pool.query('DELETE FROM "CryptoInvestment"');
-        stats.investments = investmentsCount || 0;
+        const result = await pool.query('DELETE FROM "CryptoInvestment"');
+        stats.investments = result.rowCount || 0;
         console.log(`✅ ${stats.investments} investissements supprimés`);
       }
 
-      // Supprimer les positions et snapshots
+      // Suppression des positions et snapshots
       if (options.portfolios || options.all) {
-        const { rowCount: positionsCount } = await pool.query('DELETE FROM "CryptoPosition"');
-        stats.positions = positionsCount || 0;
+        const posResult = await pool.query('DELETE FROM "CryptoPosition"');
+        stats.positions = posResult.rowCount || 0;
         console.log(`✅ ${stats.positions} positions supprimées`);
 
-        const { rowCount: snapshotsCount } = await pool.query('DELETE FROM "CryptoPortfolioSnapshot"');
-        stats.snapshots = snapshotsCount || 0;
+        const snapResult = await pool.query('DELETE FROM "CryptoPortfolioSnapshot"');
+        stats.snapshots = snapResult.rowCount || 0;
         console.log(`✅ ${stats.snapshots} snapshots supprimés`);
       }
 
-      // Supprimer les profils d'investisseurs
+      // Suppression des investisseurs
       if (options.investors || options.all) {
-        const { rowCount: investorsCount } = await pool.query('DELETE FROM "InvestorProfile"');
-        stats.investors = investorsCount || 0;
+        const invResult = await pool.query('DELETE FROM "InvestorProfile"');
+        stats.investors = invResult.rowCount || 0;
         console.log(`✅ ${stats.investors} profils d'investisseurs supprimés`);
       }
 
-      // Supprimer les gems
+      // Suppression des gems
       if (options.gems || options.all) {
-        const { rowCount: alertsCount } = await pool.query('DELETE FROM "CryptoGemAlert"');
-        stats.alerts = alertsCount || 0;
+        const alertResult = await pool.query('DELETE FROM "CryptoGemAlert"');
+        stats.alerts = alertResult.rowCount || 0;
         console.log(`✅ ${stats.alerts} alertes supprimées`);
 
-        const { rowCount: gemsCount } = await pool.query('DELETE FROM "CryptoGemProject"');
-        stats.gems = gemsCount || 0;
+        const gemResult = await pool.query('DELETE FROM "CryptoGemProject"');
+        stats.gems = gemResult.rowCount || 0;
         console.log(`✅ ${stats.gems} projets crypto supprimés`);
       }
 
-      // Réinitialiser l'état du système si nécessaire
+      // Réinitialisation de l'état
       if (options.all) {
         await pool.query(`
           UPDATE "CryptoGemState" 
@@ -98,6 +99,7 @@ export const handler = async (req: Request, context: Context) => {
         console.log("✅ État du système réinitialisé");
       }
 
+      // Retourner une réponse de succès
       return new Response(
         JSON.stringify({
           success: true,
@@ -111,7 +113,7 @@ export const handler = async (req: Request, context: Context) => {
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     } finally {
-      // Fermeture de la connexion
+      // Fermer la connexion à la base de données
       await pool.end();
     }
   } catch (error) {
@@ -125,5 +127,3 @@ export const handler = async (req: Request, context: Context) => {
     );
   }
 };
-
-export default withDashboardAuth(handler);

@@ -1,7 +1,7 @@
 [build]
   command = "./scripts/deploy.sh"
   publish = "dist"
-  environment = { NODE_VERSION = "18" }
+  environment = { NODE_VERSION = "22.17.0" }
 
 [[redirects]]
   from = "/api/*"
