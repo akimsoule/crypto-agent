@@ -5,4 +5,11 @@ export { FacebookService } from './FacebookService';
 export { CronService } from './CronService';
 export { HttpService } from './HttpService';
 export { ResendService } from './ResendService';
-export { DataResetService } from './DataResetService';
+
+// Services de réinitialisation
+export { 
+  InvestorResetService, 
+  GemResetService, 
+  PortfolioResetService, 
+  ResetOrchestrator 
+} from './reset';

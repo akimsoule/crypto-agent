@@ -1,10 +1,11 @@
 import type { Context } from "@netlify/functions";
-import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
-import { DataResetServicePg } from "../src/services/DataResetServicePg";
+import { withDashboardAuth } from "../middleware/dashBoardMiddleware.mts";
+import { ResetOrchestrator } from "../../src/services/reset/ResetOrchestrator";
 
 /**
- * Version légère de l'endpoint pour réinitialiser les données
- * Utilise directement pg au lieu de Prisma pour réduire la taille
+ * Fonction Netlify qui orchestre les réinitialisations via les options spécifiées
+ * Cette fonction pourrait être utilisée comme un point d'entrée unique pour les réinitialisations
+ * mais avec une taille réduite car l'orchestrateur délègue les opérations aux services spécialisés
  */
 export const handler = async (req: Request, context: Context) => {
   if (req.method !== 'POST') {
@@ -32,8 +33,8 @@ export const handler = async (req: Request, context: Context) => {
       );
     }
 
-    const service = new DataResetServicePg();
-    const result = await service.resetData(options);
+    const orchestrator = new ResetOrchestrator();
+    const result = await orchestrator.resetData(options);
 
     return new Response(
       JSON.stringify({
