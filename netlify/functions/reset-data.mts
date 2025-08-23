@@ -1,8 +1,6 @@
 import type { Context } from "@netlify/functions";
-import { PrismaClient } from '@prisma/client';
 import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
-
-const prisma = new PrismaClient();
+import { DataResetService } from "../src/services/DataResetService";
 
 /**
  * Endpoint pour réinitialiser les données des investisseurs et des gems
@@ -23,6 +21,8 @@ export const handler = async (req: Request, context: Context) => {
     );
   }
 
+  const dataResetService = new DataResetService();
+  
   try {
     const url = new URL(req.url);
     const resetInvestors = url.searchParams.get('investors') === 'true';
@@ -39,69 +39,22 @@ export const handler = async (req: Request, context: Context) => {
       );
     }
 
-    const stats = {
-      investments: 0,
-      positions: 0,
-      snapshots: 0,
-      investors: 0,
-      gems: 0,
-      alerts: 0
-    };
+    const resetResult = await dataResetService.resetData({
+      investors: resetInvestors,
+      gems: resetGems,
+      portfolios: resetPortfolios,
+      all: resetAll
+    });
 
-    // Toujours supprimer les investissements en premier (contrainte de clé étrangère)
-    if (resetInvestors || resetAll) {
-      const deletedInvestments = await prisma.cryptoInvestment.deleteMany();
-      stats.investments = deletedInvestments.count;
-      console.log(`✅ ${stats.investments} investissements supprimés`);
-    }
-
-    // Supprimer les positions et snapshots (contrainte de clé étrangère)
-    if (resetPortfolios || resetAll) {
-      const deletedPositions = await prisma.cryptoPosition.deleteMany();
-      stats.positions = deletedPositions.count;
-      console.log(`✅ ${stats.positions} positions supprimées`);
-
-      const deletedSnapshots = await prisma.cryptoPortfolioSnapshot.deleteMany();
-      stats.snapshots = deletedSnapshots.count;
-      console.log(`✅ ${stats.snapshots} snapshots supprimés`);
-    }
-
-    // Supprimer les profils d'investisseurs
-    if (resetInvestors || resetAll) {
-      const deletedInvestors = await prisma.investorProfile.deleteMany();
-      stats.investors = deletedInvestors.count;
-      console.log(`✅ ${stats.investors} profils d'investisseurs supprimés`);
-    }
-
-    // Supprimer les gems
-    if (resetGems || resetAll) {
-      const deletedAlerts = await prisma.cryptoGemAlert.deleteMany();
-      stats.alerts = deletedAlerts.count;
-      console.log(`✅ ${stats.alerts} alertes supprimées`);
-
-      const deletedGems = await prisma.cryptoGemProject.deleteMany();
-      stats.gems = deletedGems.count;
-      console.log(`✅ ${stats.gems} projets crypto supprimés`);
-    }
-
-    // Réinitialiser l'état du système si nécessaire
-    if (resetAll) {
-      await prisma.cryptoGemState.updateMany({
-        data: {
-          currentPage: 1,
-          processPhase: 'FETCH',
-          isProcessing: false,
-          lastCycleStart: new Date()
-        }
-      });
-      console.log("✅ État du système réinitialisé");
+    if (!resetResult.success) {
+      throw new Error(resetResult.error || 'Erreur inconnue lors de la réinitialisation');
     }
 
     const result = {
       success: true,
-      message: 'Réinitialisation terminée avec succès',
+      message: resetResult.message || 'Réinitialisation terminée avec succès',
       details: {
-        ...stats,
+        ...(resetResult.stats || {}),
         resetInvestors,
         resetGems,
         resetPortfolios,
@@ -135,7 +88,7 @@ export const handler = async (req: Request, context: Context) => {
       }
     );
   } finally {
-    await prisma.$disconnect();
+    await dataResetService.disconnect();
   }
 };
 
