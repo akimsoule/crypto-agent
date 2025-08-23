@@ -1,8 +1,0 @@
-{
-  "external": [
-    "@prisma/client",
-    "prisma",
-    "jsonwebtoken"
-  ],
-  "included_files": ["!node_modules/.prisma/**/*"]
-}

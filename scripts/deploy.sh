@@ -25,21 +25,6 @@ npx prisma generate
 echo "🔧 Optimisation des fonctions Netlify..."
 ./scripts/optimize-functions.sh
 
-# 5.1 Copie des fichiers de configuration des fonctions
-echo "📝 Copie des fichiers de configuration des fonctions..."
-if [ -f "netlify-functions-config.json" ]; then
-  cp netlify-functions-config.json .netlify/
-  echo "✅ Configuration globale des fonctions copiée"
-fi
-
-# 5.2 Vérification des configurations spécifiques par fonction
-for CONFIG in netlify/functions/*.config.json; do
-  if [ -f "$CONFIG" ]; then
-    FUNC_NAME=$(basename "$CONFIG" .mts.config.json)
-    echo "📄 Configuration trouvée pour $FUNC_NAME"
-  fi
-done
-
 # 6. Seed de la base de données (avec gestion d'erreur gracieuse)
 echo "🌱 Seeding de la base de données..."
 if npm run db:seed; then
