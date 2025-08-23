@@ -61,7 +61,7 @@ export const useDataReset = () => {
       if (options.all) params.append('all', 'true');
 
       // Utiliser la version simple de l'endpoint
-      const url = `/.netlify/functions/reset-data-simple?${params.toString()}`;
+      const url = `/api/reset-data?${params.toString()}`;
       
       const response = await fetch(url, {
         method: 'POST',
