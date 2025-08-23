@@ -10,7 +10,6 @@ import {
 import { Link } from 'react-router-dom';
 import FacebookManager from '../../components/FacebookManager';
 import DatabaseSeedButton from '../../components/DatabaseSeedButton';
-import { OptimizedResetButtons } from '../../components/OptimizedResetButtons';
 import AdminPageHeader from '../../components/AdminPageHeader';
 import AdminPageLayout from '../../components/AdminPageLayout';
 
@@ -198,7 +197,6 @@ export default function AdminDashboard() {
           {/* Gestion Base de Données */}
           <div className="flex flex-col md:flex-row gap-4">
             <DatabaseSeedButton variant="card" className="flex-1" />
-            <OptimizedResetButtons />
           </div>
         </div>
 
