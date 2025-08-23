@@ -1,6 +1,6 @@
 import type { Context } from "@netlify/functions";
-import { withDashboardAuth } from "../middleware/dashBoardMiddleware.mts";
-import { GemResetService } from "../../src/services/reset/GemResetService";
+import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
+import { GemResetService } from "../src/services/reset/GemResetService";
 
 /**
  * Fonction Netlify dédiée à la réinitialisation des gems

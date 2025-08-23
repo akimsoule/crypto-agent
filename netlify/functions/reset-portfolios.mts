@@ -1,9 +1,9 @@
 import type { Context } from "@netlify/functions";
-import { withDashboardAuth } from "../middleware/dashBoardMiddleware.mts";
-import { InvestorResetService } from "../../src/services/reset/InvestorResetService";
+import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
+import { PortfolioResetService } from "../src/services/reset/PortfolioResetService";
 
 /**
- * Fonction Netlify dédiée à la réinitialisation des investisseurs
+ * Fonction Netlify dédiée à la réinitialisation des portfolios
  */
 export const handler = async (req: Request, context: Context) => {
   if (req.method !== 'POST') {
@@ -14,13 +14,13 @@ export const handler = async (req: Request, context: Context) => {
   }
   
   try {
-    const service = new InvestorResetService();
-    const result = await service.resetInvestors();
+    const service = new PortfolioResetService();
+    const result = await service.resetPortfolios();
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Réinitialisation des investisseurs terminée',
+        message: 'Réinitialisation des portfolios terminée',
         details: {
           ...result,
           timestamp: new Date().toISOString()

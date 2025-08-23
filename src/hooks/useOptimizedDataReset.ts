@@ -42,7 +42,7 @@ export const useOptimizedDataReset = () => {
     setSuccess(null);
     
     try {
-      const response = await fetch('/api/reset/reset-investors', {
+      const response = await fetch('/api/reset-investors', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -88,8 +88,8 @@ export const useOptimizedDataReset = () => {
     
     try {
       const url = resetState 
-        ? '/api/reset/reset-gems?resetState=true'
-        : '/api/reset/reset-gems';
+        ? '/api/reset-gems?resetState=true'
+        : '/api/reset-gems';
         
       const response = await fetch(url, {
         method: 'POST',
@@ -136,7 +136,7 @@ export const useOptimizedDataReset = () => {
     setSuccess(null);
     
     try {
-      const response = await fetch('/api/reset/reset-portfolios', {
+      const response = await fetch('/api/reset-portfolios', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -182,7 +182,7 @@ export const useOptimizedDataReset = () => {
     setStats(null);
     
     try {
-      const response = await fetch('/api/reset/reset-orchestrator?all=true', {
+      const response = await fetch('/api/reset-orchestrator?all=true', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

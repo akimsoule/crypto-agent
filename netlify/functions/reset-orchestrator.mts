@@ -1,6 +1,6 @@
 import type { Context } from "@netlify/functions";
-import { withDashboardAuth } from "../middleware/dashBoardMiddleware.mts";
-import { ResetOrchestrator } from "../../src/services/reset/ResetOrchestrator";
+import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
+import { ResetOrchestrator } from "../src/services/reset/ResetOrchestrator";
 
 /**
  * Fonction Netlify qui orchestre les réinitialisations via les options spécifiées
