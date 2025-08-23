@@ -60,8 +60,8 @@ export const useDataReset = () => {
       if (options.portfolios) params.append('portfolios', 'true');
       if (options.all) params.append('all', 'true');
 
-      // Utiliser la version simple de l'endpoint
-      const url = `/api/reset-data?${params.toString()}`;
+      // Utiliser la version légère avec pg
+      const url = `/api/reset-data-pg?${params.toString()}`;
       
       const response = await fetch(url, {
         method: 'POST',

@@ -1,10 +1,10 @@
 import type { Context } from "@netlify/functions";
 import { withDashboardAuth } from "./middleware/dashBoardMiddleware.mts";
-import { DataResetService } from "../src/services/DataResetService";
+import { DataResetServicePg } from "../src/services/DataResetServicePg";
 
 /**
- * Endpoint pour réinitialiser les données des investisseurs et des gems
- * Version optimisée pour Netlify Functions
+ * Version légère de l'endpoint pour réinitialiser les données
+ * Utilise directement pg au lieu de Prisma pour réduire la taille
  */
 export const handler = async (req: Request, context: Context) => {
   if (req.method !== 'POST') {
@@ -32,7 +32,7 @@ export const handler = async (req: Request, context: Context) => {
       );
     }
 
-    const service = new DataResetService();
+    const service = new DataResetServicePg();
     const result = await service.resetData(options);
 
     return new Response(
