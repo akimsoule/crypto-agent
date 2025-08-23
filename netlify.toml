@@ -32,7 +32,12 @@
     "@tanstack/react-query",
     "chart.js",
     "react-chartjs-2",
-    "lucide-react"
+    "lucide-react",
+    "jsonwebtoken",
+    "nodemailer",
+    "axios",
+    "date-fns",
+    "zod"
   ]
   
   # Optimisation des fonctions

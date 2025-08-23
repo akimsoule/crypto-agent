@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../infrastructure/database/prismaClient';
 
 interface ResetOptions {
   investors?: boolean;
@@ -24,10 +24,8 @@ export interface ResetResult {
 }
 
 export class DataResetService {
-  private prisma: PrismaClient;
-
-  constructor(prisma?: PrismaClient) {
-    this.prisma = prisma || new PrismaClient();
+  constructor() {
+    // Utilise l'instance Prisma partagée
   }
 
   /**
@@ -55,43 +53,43 @@ export class DataResetService {
 
       // Toujours supprimer les investissements en premier (contrainte de clé étrangère)
       if (options.investors || options.all) {
-        const deletedInvestments = await this.prisma.cryptoInvestment.deleteMany();
+        const deletedInvestments = await prisma.cryptoInvestment.deleteMany();
         stats.investments = deletedInvestments.count;
         console.log(`✅ ${stats.investments} investissements supprimés`);
       }
 
       // Supprimer les positions et snapshots (contrainte de clé étrangère)
       if (options.portfolios || options.all) {
-        const deletedPositions = await this.prisma.cryptoPosition.deleteMany();
+        const deletedPositions = await prisma.cryptoPosition.deleteMany();
         stats.positions = deletedPositions.count;
         console.log(`✅ ${stats.positions} positions supprimées`);
 
-        const deletedSnapshots = await this.prisma.cryptoPortfolioSnapshot.deleteMany();
+        const deletedSnapshots = await prisma.cryptoPortfolioSnapshot.deleteMany();
         stats.snapshots = deletedSnapshots.count;
         console.log(`✅ ${stats.snapshots} snapshots supprimés`);
       }
 
       // Supprimer les profils d'investisseurs
       if (options.investors || options.all) {
-        const deletedInvestors = await this.prisma.investorProfile.deleteMany();
+        const deletedInvestors = await prisma.investorProfile.deleteMany();
         stats.investors = deletedInvestors.count;
         console.log(`✅ ${stats.investors} profils d'investisseurs supprimés`);
       }
 
       // Supprimer les gems
       if (options.gems || options.all) {
-        const deletedAlerts = await this.prisma.cryptoGemAlert.deleteMany();
+        const deletedAlerts = await prisma.cryptoGemAlert.deleteMany();
         stats.alerts = deletedAlerts.count;
         console.log(`✅ ${stats.alerts} alertes supprimées`);
 
-        const deletedGems = await this.prisma.cryptoGemProject.deleteMany();
+        const deletedGems = await prisma.cryptoGemProject.deleteMany();
         stats.gems = deletedGems.count;
         console.log(`✅ ${stats.gems} projets crypto supprimés`);
       }
 
       // Réinitialiser l'état du système si nécessaire
       if (options.all) {
-        await this.prisma.cryptoGemState.updateMany({
+        await prisma.cryptoGemState.updateMany({
           data: {
             currentPage: 1,
             processPhase: 'FETCH',
@@ -117,9 +115,10 @@ export class DataResetService {
   }
 
   /**
-   * Ferme la connexion à la base de données
+   * Méthode de compatibilité - le client Prisma partagé gère sa propre déconnexion
    */
   async disconnect(): Promise<void> {
-    await this.prisma.$disconnect();
+    // Pas besoin de déconnexion explicite avec le client partagé
+    return Promise.resolve();
   }
 }

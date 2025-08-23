@@ -21,7 +21,11 @@ npx prisma migrate deploy
 echo "⚙️ Génération du client Prisma..."
 npx prisma generate
 
-# 5. Seed de la base de données (avec gestion d'erreur gracieuse)
+# 5. Optimisation des fonctions Netlify
+echo "🔧 Optimisation des fonctions Netlify..."
+./scripts/optimize-functions.sh
+
+# 6. Seed de la base de données (avec gestion d'erreur gracieuse)
 echo "🌱 Seeding de la base de données..."
 if npm run db:seed; then
     echo "✅ Seed terminé avec succès"
