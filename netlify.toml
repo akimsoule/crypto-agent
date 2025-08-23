@@ -39,10 +39,16 @@
     "date-fns",
     "zod"
   ]
+  included_files = ["!node_modules/.prisma/**/*"]
   
   # Optimisation des fonctions
   [functions."*"]
     node_bundler = "esbuild"
+    
+  # Configuration spécifique pour reset-data
+  [functions.reset-data]
+    node_bundler = "esbuild"
+    external_node_modules = ["@prisma/client", "prisma", "jsonwebtoken"]
 
 # Note: Les scheduled functions peuvent être configurées via l'interface Netlify
 # ou via des webhooks externes comme GitHub Actions / Zapier
