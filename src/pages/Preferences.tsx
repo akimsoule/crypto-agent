@@ -13,15 +13,15 @@ const Preferences = () => {
   }, [searchParams]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-base-200 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="bg-base-100 rounded-xl shadow-lg p-8">
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-blue-600 mb-2">
               🚀 Crypto Investors Hub
             </h1>
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-base-content">
               Préférences de newsletter
             </h2>
           </div>
@@ -45,8 +45,8 @@ const Preferences = () => {
           </div>
 
           {email && (
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <p className="text-sm text-gray-700">
+            <div className="bg-base-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-base-content">
                 <strong>Email :</strong> {email}
               </p>
             </div>
@@ -70,7 +70,7 @@ const Preferences = () => {
 
             <Link
               to="/"
-              className="w-full bg-gray-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors inline-block text-center"
+              className="w-full bg-neutral text-neutral-content py-3 px-4 rounded-lg font-medium hover:bg-neutral-focus transition-colors inline-block text-center"
             >
               Retour au site
             </Link>

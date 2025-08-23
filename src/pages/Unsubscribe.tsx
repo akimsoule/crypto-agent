@@ -60,23 +60,23 @@ const Unsubscribe = () => {
 
   if (step === 'confirmation') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-base-200 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+          <div className="bg-base-100 rounded-xl shadow-lg p-8 text-center">
             <div className="text-6xl mb-6">✅</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl font-bold text-base-content mb-4">
               Désabonnement confirmé
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-base-content/70 mb-6">
               {unsubscribeResult?.message || 'Vous avez été désabonné avec succès de notre newsletter.'}
             </p>
-            <p className="text-sm text-gray-500 mb-8">
+            <p className="text-sm text-base-content/60 mb-8">
               Nous sommes désolés de vous voir partir. Si vous changez d'avis, 
               vous pourrez toujours vous réabonner sur notre site.
             </p>
             <Link
               to="/"
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors inline-block"
+              className="w-full bg-primary text-primary-content py-3 px-4 rounded-lg font-medium hover:bg-primary-focus transition-colors inline-block"
             >
               Retour au site
             </Link>
@@ -87,15 +87,15 @@ const Unsubscribe = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-base-200 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="bg-base-100 rounded-xl shadow-lg p-8">
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-blue-600 mb-2">
               🚀 Crypto Investors Hub
             </h1>
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-base-content">
               Se désabonner de la newsletter
             </h2>
           </div>
@@ -108,7 +108,7 @@ const Unsubscribe = () => {
               </p>
               <Link
                 to="/"
-                className="mt-3 w-full bg-gray-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors inline-block text-center"
+                className="mt-3 w-full bg-neutral text-neutral-content py-2 px-4 rounded-lg font-medium hover:bg-neutral-focus transition-colors inline-block text-center"
               >
                 Retour au site
               </Link>
@@ -137,7 +137,7 @@ const Unsubscribe = () => {
               {/* Formulaire */}
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-base-content mb-2">
                     Adresse email :
                   </label>
                   <input
@@ -147,11 +147,11 @@ const Unsubscribe = () => {
                     onChange={handleEmailChange}
                     required
                     placeholder="votre@email.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    className="w-full px-4 py-3 border border-base-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
                     disabled={isUnsubscribing || isCheckingSubscription}
                   />
                   {isCheckingSubscription && (
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-sm text-base-content/60 mt-1">
                       Vérification de l'abonnement...
                     </p>
                   )}
@@ -160,14 +160,14 @@ const Unsubscribe = () => {
                 <button
                   type="submit"
                   disabled={isUnsubscribing || isCheckingSubscription || (subscriptionInfo !== null && !subscriptionInfo.isActive)}
-                  className="w-full bg-red-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  className="w-full bg-error text-error-content py-3 px-4 rounded-lg font-medium hover:bg-error-focus disabled:bg-neutral-focus disabled:cursor-not-allowed transition-colors"
                 >
                   {isUnsubscribing ? 'Désabonnement en cours...' : 'Confirmer le désabonnement'}
                 </button>
 
                 <Link
                   to={`/preferences${email ? `?email=${encodeURIComponent(email)}` : ''}`}
-                  className="w-full bg-gray-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors inline-block text-center"
+                  className="w-full bg-neutral text-neutral-content py-3 px-4 rounded-lg font-medium hover:bg-neutral-focus transition-colors inline-block text-center"
                 >
                   Modifier mes préférences
                 </Link>
