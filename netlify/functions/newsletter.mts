@@ -1,5 +1,4 @@
 import { Context } from '@netlify/functions'
-import { withDashboardAuth } from './middleware/dashBoardMiddleware.mts';
 import { NewsletterService, HttpService } from '../src/services';
 
 interface SubscriptionRequest {

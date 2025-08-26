@@ -1,4 +1,3 @@
-import { Handler, HandlerEvent, HandlerContext, HandlerResponse } from '@netlify/functions';
 import { HttpService, NewsletterService } from '../src/services';
 
 /**
