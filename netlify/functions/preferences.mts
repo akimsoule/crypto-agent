@@ -1,14 +1,6 @@
 import { Context } from '@netlify/functions'
 import { NewsletterService, HttpService } from '../src/services';
 
-interface PreferencesData {
-  email: string;
-  preferences: {
-    frequency?: 'weekly' | 'daily' | 'monthly';
-    topics?: string[];
-    format?: 'html' | 'text';
-  };
-}
 
 const handler = async (request: Request, context: Context) => {
   const headers = HttpService.getCorsHeadersForMethods(['GET', 'POST', 'OPTIONS']);
