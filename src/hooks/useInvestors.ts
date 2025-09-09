@@ -7,6 +7,7 @@ export interface CryptoInvestment {
   coinId: string;
   symbol: string;
   timestamp: string;
+  lastExecutedAt?: string | null;
   // Ajoutez d'autres champs si nécessaire
 }
 
@@ -23,6 +24,7 @@ export interface CryptoPosition {
   unrealizedPnLPercent: number;
   daysSinceEntry: number;
   lastUpdated: string;
+  lastExecutedAt?: string | null;
 }
 
 export interface CryptoPortfolioSnapshot {
@@ -63,6 +65,8 @@ export interface Investor {
   updatedAt: string;
   investments: CryptoInvestment[];
   portfolioSnapshots: CryptoPortfolioSnapshot[];
+  lastExecutions?: { symbol: string; lastExecutedAt: string }[];
+  lastExecutedAt?: string | null;
 }
 
 export function useInvestors() {

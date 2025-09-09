@@ -90,7 +90,10 @@ export async function runDev(profs?: Profile[]): Promise<void> {
       return;
     }
 
-    for (const inv of investors) {
+  // Accumule les couples (investorId, symbol) exécutés pour batch upsert
+  const executed: { profileId: string; symbol: string }[] = [];
+
+  for (const inv of investors) {
       const symbols = normalizeSymbols(inv.symbols as string[] | null);
       const period = mapPeriod(inv.period as string | null);
       const indicatorType = mapIndicator(inv.strategyName as string | null);
@@ -137,12 +140,42 @@ export async function runDev(profs?: Profile[]): Promise<void> {
             },
           })
         );
-        await new Runner(new SecondaryAccountConfig(params)).run(
-          inv // inv est de type Prisma InvestorProfile
-        );
+        await new Runner(new SecondaryAccountConfig(params)).run(inv);
+        // Enregistre les symboles visités
+        for (const s of symbols) {
+          executed.push({ profileId: inv.id, symbol: s.toUpperCase() + 'USDT' });
+        }
       } catch (e) {
         console.error(`runDev: erreur pour ${inv.name}`, e);
       }
+    }
+
+    // Batch upsert final (dernière date d'exécution)
+    if (executed.length) {
+      const now = new Date();
+      // Utilise un Set pour éviter doublons en cas de symboles répétés
+      const uniq = new Map<string, { profileId: string; symbol: string }>();
+      for (const e of executed) {
+        uniq.set(e.profileId + '::' + e.symbol, e);
+      }
+      const rows = Array.from(uniq.values());
+      // Prisma n'a pas de batchUpsert natif: on fait des upserts parallélisés raisonnablement
+      const CONC = 10;
+      let i = 0;
+      while (i < rows.length) {
+        const slice = rows.slice(i, i + CONC);
+        await Promise.all(
+          slice.map(r =>
+            prisma.investorSymbolExecution.upsert({
+              where: { profileId_symbol: { profileId: r.profileId, symbol: r.symbol } },
+              update: { lastExecutedAt: now },
+              create: { profileId: r.profileId, symbol: r.symbol, lastExecutedAt: now },
+            })
+          )
+        );
+        i += CONC;
+      }
+      console.log(JSON.stringify({ scope: 'runDev', event: 'executionIndexPersisted', count: rows.length }));
     }
   } finally {
     await prisma.$disconnect();

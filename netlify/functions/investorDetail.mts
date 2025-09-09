@@ -1,24 +1,24 @@
-import { endpoint, json } from './_lib/middleware.mts'
+import { endpoint, json } from "./_lib/middleware.mts";
 
 // Helpers locaux (limiter l'impact sur le reste du code)
 function toNum(v: unknown, def = 0): number {
-  if (v === null || v === undefined) return def
-  const n = typeof v === 'number' ? v : parseFloat(String(v))
-  return Number.isFinite(n) ? n : def
+  if (v === null || v === undefined) return def;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : def;
 }
 
 function daysBetween(a: Date, b: Date): number {
-  const ms = Math.abs(b.getTime() - a.getTime())
-  return Math.floor(ms / 86_400_000)
+  const ms = Math.abs(b.getTime() - a.getTime());
+  return Math.floor(ms / 86_400_000);
 }
 
 export default endpoint({
-  methods: ['GET'],
+  methods: ["GET"],
   auth: false,
   handler: async ({ req, prisma }) => {
-    const url = new URL(req.url)
-    const id = url.searchParams.get('id')
-    if (!id) return json({ success: false, error: 'Param id requis' }, 400)
+    const url = new URL(req.url);
+    const id = url.searchParams.get("id");
+    if (!id) return json({ success: false, error: "Param id requis" }, 400);
 
     // Récupération du profil + relations nécessaires
     const profile = await prisma.investorProfile.findUnique({
@@ -26,31 +26,32 @@ export default endpoint({
       include: {
         Position: true,
         Order: {
-          orderBy: { createdAt: 'desc' },
-          take: 50 // limiter pour l'instant
+          orderBy: { createdAt: "desc" },
+          take: 50, // limiter pour l'instant
         },
         snapshots: {
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        }
-      }
-    })
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        },
+      },
+    });
 
-    if (!profile) return json({ success: false, error: 'Investor introuvable' }, 404)
+    if (!profile)
+      return json({ success: false, error: "Investor introuvable" }, 404);
 
     // Conversion des positions en structure "front"
-    const now = new Date()
-    const positions = profile.Position.map(pos => {
-      const openPrice = toNum(pos.openPriceAvg)
-      const markPrice = toNum(pos.markPrice)
-      const unrealized = toNum(pos.unrealizedPL)
+    const now = new Date();
+    const positions = profile.Position.map((pos) => {
+      const openPrice = toNum(pos.openPriceAvg);
+      const markPrice = toNum(pos.markPrice);
+      const unrealized = toNum(pos.unrealizedPL);
       // Pourcent : (mark - open)/open * 100 (ajuster SHORT)
-      let pct = 0
+      let pct = 0;
       if (openPrice > 0) {
-        const raw = ((markPrice - openPrice) / openPrice) * 100
-        pct = pos.holdSide?.toUpperCase() === 'SHORT' ? -raw : raw
+        const raw = ((markPrice - openPrice) / openPrice) * 100;
+        pct = pos.holdSide?.toUpperCase() === "SHORT" ? -raw : raw;
       }
-      const createdAt = pos.createdAt ?? now
+      const createdAt = pos.createdAt ?? now;
       return {
         id: pos.id, // NOTE: front a un type number, mais l'id Prisma est une string
         snapshotId: 0, // pas de lien direct pour l'instant
@@ -63,17 +64,21 @@ export default endpoint({
         unrealizedPnL: unrealized,
         unrealizedPnLPercent: pct,
         daysSinceEntry: daysBetween(createdAt, now),
-        lastUpdated: (pos.updatedAt ?? now).toISOString()
-      }
-    })
+        lastUpdated: (pos.updatedAt ?? now).toISOString(),
+      };
+    });
 
     // Agrégations de base
-    const totalUnrealized = positions.reduce((acc, p) => acc + p.unrealizedPnL, 0)
+    const totalUnrealized = positions.reduce(
+      (acc, p) => acc + p.unrealizedPnL,
+      0
+    );
     // Valeur approximative: balance initiale + PnL latent (en attendant un suivi de balance réel)
-    const initialBalance = profile.initialBalance ?? 0
-    const totalValue = initialBalance + totalUnrealized
-    const totalReturn = totalValue - initialBalance
-    const totalReturnPercent = initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0
+    const initialBalance = profile.initialBalance ?? 0;
+    const totalValue = initialBalance + totalUnrealized;
+    const totalReturn = totalValue - initialBalance;
+    const totalReturnPercent =
+      initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;
 
     // Construction d'un snapshot courant synthétique
     const currentSnapshot = {
@@ -92,12 +97,12 @@ export default endpoint({
       winningTrades: 0,
       losingTrades: 0,
       activePositions: positions.length,
-      positions
-    }
+      positions,
+    };
 
     // Adaptation des snapshots historiques si des métriques sont présentes
-    const historical = profile.snapshots.map(s => {
-      const metrics = (s.metrics as any) || {}
+    const historical = profile.snapshots.map((s) => {
+      const metrics = (s.metrics as any) || {};
       return {
         id: 1, // placeholder uniforme (le front n'utilise peut-être pas encore l'id réel)
         investorId: profile.id,
@@ -114,18 +119,44 @@ export default endpoint({
         winningTrades: toNum(metrics.winningTrades),
         losingTrades: toNum(metrics.losingTrades),
         activePositions: toNum(metrics.activePositions),
-        positions: []
-      }
-    })
+        positions: [],
+      };
+    });
 
     // Investments : on dérive des Orders récentes (structure minimaliste)
-    const investments = profile.Order.slice(0, 20).map(o => ({
+    const investments = profile.Order.slice(0, 20).map((o) => ({
       id: o.orderId,
       investorId: profile.id,
       coinId: o.symbol,
       symbol: o.symbol,
-      timestamp: o.createdAt.toISOString()
-    }))
+      timestamp: o.createdAt.toISOString(),
+    }));
+
+    // Dernières exécutions (investor-symbol)
+    const execRows = await prisma.investorSymbolExecution.findMany({
+      where: { profileId: profile.id },
+    });
+    const execMap = new Map<string, string>();
+    let latestExec: string | null = null;
+    for (const r of execRows) {
+      const iso = r.lastExecutedAt.toISOString();
+      execMap.set(r.symbol, iso);
+      if (!latestExec || iso > latestExec) latestExec = iso;
+    }
+
+    // Enrichir positions / investments avec lastExecutedAt si disponible
+    const positionsWithExec = positions.map((p) => ({
+      ...p,
+      lastExecutedAt: execMap.get(p.symbol) || null,
+    }));
+    const investmentsWithExec = investments.map((i) => ({
+      ...i,
+      lastExecutedAt: execMap.get(i.symbol) || null,
+    }));
+
+    const executions = Array.from(execMap.entries()).map(
+      ([symbol, lastExecutedAt]) => ({ symbol, lastExecutedAt })
+    );
 
     return {
       id: profile.id,
@@ -143,8 +174,10 @@ export default endpoint({
       isActive: profile.isActive,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
-      investments,
-      portfolioSnapshots: [currentSnapshot, ...historical]
-    }
-  }
-})
+      investments: investmentsWithExec,
+      portfolioSnapshots: [currentSnapshot, ...historical],
+      lastExecutions: executions,
+      lastExecutedAt: latestExec,
+    };
+  },
+});

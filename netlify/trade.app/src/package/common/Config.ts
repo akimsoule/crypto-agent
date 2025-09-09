@@ -16,7 +16,6 @@ interface TelegramLike {
 }
 
 class SafeTelegram {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private inner: TelegramLike | null;
   private enabled: boolean;
   constructor(token: string | undefined, enabled: boolean) {

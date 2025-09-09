@@ -310,6 +310,50 @@ export default function InvestorsList() {
                 )}
               </div>
 
+              {/* Activité d'exécution */}
+              <div className="mb-6">
+                <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  <span>Activité d'exécution</span>
+                  {selectedInvestor.lastExecutedAt && (
+                    <span className="badge badge-sm badge-outline">Dernier run: {new Date(selectedInvestor.lastExecutedAt).toLocaleString('fr-FR')}</span>
+                  )}
+                </h4>
+                {selectedInvestor.lastExecutions && selectedInvestor.lastExecutions.length > 0 ? (
+                  <div className="overflow-x-auto -mx-2 sm:mx-0 border border-base-200 rounded-lg max-h-60">
+                    <table className="table table-compact text-xs sm:text-sm">
+                      <thead>
+                        <tr>
+                          <th>Symbole</th>
+                          <th>Dernière exécution</th>
+                          <th>Âge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedInvestor.lastExecutions
+                          .slice()
+                          .sort((a,b)=> a.symbol.localeCompare(b.symbol))
+                          .map(exec => {
+                            const dt = new Date(exec.lastExecutedAt);
+                            const diffMs = Date.now() - dt.getTime();
+                            const diffMin = Math.floor(diffMs/60000);
+                            const diffH = Math.floor(diffMin/60);
+                            const age = diffH > 0 ? `${diffH}h` : `${diffMin}m`;
+                            return (
+                              <tr key={exec.symbol}>
+                                <td className="font-mono">{exec.symbol}</td>
+                                <td>{dt.toLocaleString('fr-FR')}</td>
+                                <td>{age}</td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-base-content/60">Aucune exécution enregistrée encore.</p>
+                )}
+              </div>
+
               {/* Historique des investissements */}
               <div className="mb-6">
                 <h4 className="font-semibold text-lg mb-4">Derniers Investissements</h4>

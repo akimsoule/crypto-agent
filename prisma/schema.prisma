@@ -37,6 +37,7 @@ model InvestorProfile {
   Order           Order[]
   Position        Position[]
   snapshots       Snapshot[]
+  investorSymbolExecutions InvestorSymbolExecution[]
 
   @@index([isActive, strategyName])
 }
@@ -216,4 +217,16 @@ model FacebookPostLog {
   @@index([createdAt])
   @@index([type, createdAt])
   @@index([duplicateHash])
+}
+
+/// Historique de la dernière exécution d'un couple (investisseur, symbole)
+model InvestorSymbolExecution {
+  profileId String
+  symbol    String
+  lastExecutedAt DateTime @default(now())
+  profile   InvestorProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, symbol])
+  @@index([lastExecutedAt])
+  @@index([symbol, lastExecutedAt])
 }
