@@ -40,7 +40,7 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 log "APP_ENV=$APP_ENV"
 
 step "2. Installation dépendances"
-npm ci || npm install
+npm install
 
 step "3. Migrations Prisma"
 npx prisma migrate deploy
