@@ -1,42 +1,24 @@
-import { Context } from '@netlify/functions';
-import { withDashboardAuth } from './middleware/dashBoardMiddleware.mts';
-import { NewsletterService } from '../src/services/NewsletterService.ts';
-import { HttpService } from '../src/services/HttpService.ts';
+import { endpoint } from './_lib/middleware.mts'
 
-const handler = async (request: Request, context: Context): Promise<Response> => {
-  if (request.method === 'OPTIONS') {
-    return HttpService.handleOptions();
-  }
+// Endpoint: POST /api/newsletter-send
+// Simule l'envoi d'une newsletter (placeholder). Met à jour counters + logs.
 
-  if (request.method !== 'POST') {
-    return HttpService.createErrorResponse('Méthode non autorisée', 405);
-  }
-
-  const newsletterService = new NewsletterService();
-
-  try {
-    // Générer le contenu de la newsletter
-    const content = await newsletterService.generateNewsletterContent();
-    
-    // Envoyer la newsletter
-    const result = await newsletterService.sendNewsletter(content);
-
-    if (!result.success) {
-      return HttpService.createErrorResponse(result.message, 500);
+export default endpoint({
+  methods: ['POST'],
+  auth: true,
+  roles: ['admin'],
+  handler: async ({ prisma, user }) => {
+    const activeSubs = await prisma.newsletterSubscription.findMany({ where: { isActive: true } })
+    let sent = 0; let failed = 0
+    for (const sub of activeSubs) {
+      try {
+        await prisma.newsletterSendLog.create({ data: { subscriptionId: sub.id, status: 'SENT' } })
+        await prisma.newsletterSubscription.update({ where: { id: sub.id }, data: { emailsSent: { increment: 1 }, lastEmailSent: new Date() } })
+        sent++
+      } catch {
+        failed++
+      }
     }
-
-    return HttpService.createSuccessResponse({
-      message: result.message,
-      stats: result.data
-    });
-
-  } catch (error) {
-    console.error("❌ Erreur lors de l'envoi de la newsletter:", error);
-    const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
-    return HttpService.createErrorResponse(errorMessage, 500);
-  } finally {
-    await newsletterService.disconnect();
+    return { message: 'Newsletter envoyée', stats: { sent, failed, by: user?.username } }
   }
-};
-
-export default withDashboardAuth(handler);
+})

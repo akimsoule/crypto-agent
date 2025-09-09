@@ -1,55 +1,41 @@
-import { Context } from '@netlify/functions';
-import { withDashboardAuth } from './middleware/dashBoardMiddleware.mts';
-import { FacebookService, HttpService } from '../src/services';
+import { endpoint } from './_lib/middleware.mts'
+import crypto from 'crypto'
 
-interface FacebookPostRequest {
-  type?: 'gems' | 'performance' | 'market' | 'custom';
-  customMessage?: string;
-  gemId?: string;
-}
+// Endpoint: POST /api/facebook-post  body: { type, customMessage? }
+// Simule la création d'un post et applique des règles simples de rate limiting.
 
-const handler = async (request: Request, context: Context) => {
-  const headers = HttpService.getCorsHeadersForMethods(['GET', 'POST', 'OPTIONS']);
+const MAX_POSTS_PER_DAY = 10
+const MIN_MINUTES_BETWEEN = 10
+const DUPLICATE_THRESHOLD = 2
 
-  // Gérer les requêtes OPTIONS (preflight)
-  if (request.method === "OPTIONS") {
-    return HttpService.handleOptions(headers);
-  }
+import { getPrisma } from './_lib/prisma.mjs'
 
-  if (request.method !== "POST") {
-    return HttpService.createMethodNotAllowedResponse(['POST'], headers);
-  }
-
-  try {
-    const body: FacebookPostRequest = await HttpService.parseJsonBody(request);
-    const facebookService = new FacebookService();
-    
-    const result = await facebookService.createPost(body);
-
-    if (result.success) {
-      return HttpService.createSuccessResponse(
-        {
-          postId: result.postId,
-          timestamp: result.timestamp
-        },
-        result.message,
-        200,
-        headers
-      );
-    } else {
-      return HttpService.createValidationErrorResponse(result.message, headers);
+export default endpoint({
+  methods: ['POST'],
+  auth: true,
+  handler: async ({ req }) => {
+    const prisma = getPrisma()
+    const body = await req.json().catch(() => ({})) as { type?: string; customMessage?: string }
+    const type = body.type || 'generic'
+    const message = body.customMessage || `Post automatique type ${type}`
+    const h = hash(message)
+    const now = new Date()
+    const start = new Date(); start.setHours(0,0,0,0)
+    const end = new Date(); end.setHours(23,59,59,999)
+    const [postsToday, lastPost, duplicateCount] = await Promise.all([
+      prisma.facebookPostLog.count({ where: { createdAt: { gte: start, lte: end } } }),
+      prisma.facebookPostLog.findFirst({ orderBy: { createdAt: 'desc' } }),
+      prisma.facebookPostLog.count({ where: { duplicateHash: h } }),
+    ])
+    if (postsToday >= MAX_POSTS_PER_DAY) return { message: 'Limite quotidienne atteinte', code: 429 }
+    if (lastPost) {
+      const diffMin = (now.getTime() - lastPost.createdAt.getTime()) / 60000
+      if (diffMin < MIN_MINUTES_BETWEEN) return { message: 'Trop tôt depuis le dernier post', code: 429 }
     }
-
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-    console.error("❌ Erreur lors de la publication Facebook:", errorMessage);
-
-    return HttpService.createErrorResponse(
-      "Erreur lors de la publication sur Facebook",
-      500,
-      headers
-    );
+    if (duplicateCount >= DUPLICATE_THRESHOLD) return { message: 'Message dupliqué trop fréquent', code: 409 }
+    await prisma.facebookPostLog.create({ data: { type, message, duplicateHash: h } })
+    return { message: 'Post enregistré (simulation)' }
   }
-};
+})
 
-export default withDashboardAuth(handler);
+function hash(msg: string) { return crypto.createHash('sha256').update(msg).digest('hex').slice(0,32) }

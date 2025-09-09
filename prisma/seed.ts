@@ -1,188 +1,301 @@
-import { PrismaClient } from '@prisma/client';
-import { InvestorProfileFactory } from '../types/investor';
+import { PrismaClient } from "@prisma/client";
+import { fileURLToPath } from "url";
+import path from "path";
+import { InvestorFactory } from "../netlify/trade.app/src/package/investor/InvestorFactory";
+import { MixMarginModeEnum } from "../netlify/trade.app/src/package/common/MapperType";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('🌱 Seeding database...');
+/*
+  Seed des investisseurs basé sur les presets de InvestorFactory.
+  On stocke un sous-ensemble de presets avec des valeurs financières par défaut.
+  Ajuste les listes de symbols selon ton univers de trading réel.
+*/
 
-  // 1. Configuration système - Token Facebook
-  await seedSystemConfig();
+type SeedInvestor = {
+  name: string;
+  type: string;
+  symbols: string[];
+  strategyName: string;
+  filter: string;
+  period: string;
+  leverage: number;
+  marginMode: string;
+  position?: string | null;
+  exit?: boolean;
+  initialBalance: number;
+  maxPositionSize: number;
+  riskTolerance: number; // 0-1 (ex: 0.02 = 2%)
+  isActive?: boolean;
+  riskMin?: number | null;
+  riskMax?: number | null;
+};
 
-  // 2. Profils d'investisseurs
-  await seedInvestorProfiles();
+// Mapping simplifié: strategyName = premier indicator type du preset
+// filter = nom de classe du premier filtre
 
-  // 3. État initial du système CryptoGem
-  await seedCryptoGemState();
+// Sélection de symboles par défaut (adapter)
+const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
-  // 4. Configurations système supplémentaires
-  await seedAdditionalConfigs();
+// Construction dynamique minimale à partir de PRESETS accessibles via Factory
+// On ne peut pas importer directement la constante PRESETS (non exportée), donc on reconstitue
+// une liste de types connus alignés avec InvestorType.
+const INVESTOR_TYPES: string[] = [
+  "conservative",
+  "moderate", // nouveau type (tolérance risque 0.2-0.5)
+  "balanced",
+  "aggressive",
+  "momentum",
+  "contrarian",
+  "trend_sniper",
+  "stable_seeker",
+  "degen",
+  "microcap",
+  "sentiment",
+  "ath_rebound",
+  "macd_master",
+  "envelope_strategist",
+  // Nouveaux archétypes ajoutés au PRESETS
+  "active_trader",
+  "speculative_gem",
+  "institutional",
+  "defi",
+  "sustainable",
+];
 
-  console.log('🎉 Seeding completed successfully!');
-}
+// Valeurs financières par profil (ex: plus de levier -> plus petit maxPositionSize / riskTolerance)
+const FIN_RULES: Record<
+  string,
+  { initial: number; maxPos: number; risk: number }
+> = {
+  conservative: { initial: 5000, maxPos: 300, risk: 0.01 },
+  moderate: { initial: 7500, maxPos: 480, risk: 0.016 },
+  balanced: { initial: 8000, maxPos: 500, risk: 0.015 },
+  aggressive: { initial: 10000, maxPos: 800, risk: 0.02 },
+  momentum: { initial: 9000, maxPos: 600, risk: 0.018 },
+  contrarian: { initial: 7000, maxPos: 450, risk: 0.015 },
+  trend_sniper: { initial: 9500, maxPos: 700, risk: 0.02 },
+  stable_seeker: { initial: 6000, maxPos: 350, risk: 0.012 },
+  degen: { initial: 4000, maxPos: 300, risk: 0.03 },
+  microcap: { initial: 5000, maxPos: 350, risk: 0.025 },
+  sentiment: { initial: 8500, maxPos: 550, risk: 0.017 },
+  ath_rebound: { initial: 7500, maxPos: 500, risk: 0.018 },
+  macd_master: { initial: 9000, maxPos: 650, risk: 0.02 },
+  envelope_strategist: { initial: 8200, maxPos: 520, risk: 0.017 },
+  active_trader: { initial: 7000, maxPos: 550, risk: 0.025 },
+  speculative_gem: { initial: 4500, maxPos: 320, risk: 0.035 },
+  institutional: { initial: 15000, maxPos: 900, risk: 0.012 },
+  defi: { initial: 8800, maxPos: 560, risk: 0.02 },
+  sustainable: { initial: 6500, maxPos: 400, risk: 0.013 },
+};
 
-async function seedSystemConfig() {
-  console.log('📋 Seeding system configurations...');
+// Catégories macro de crypto-actifs -> liste de symboles (adapter selon ton univers)
+const CATEGORY_SYMBOLS: Record<string, string[]> = {
+  payment: ["BTCUSDT", "LTCUSDT", "BCHUSDT"],
+  stablecoin: ["USDCUSDT"], // placeholders (rarement tradés directement)
+  utility: ["ETHUSDT", "BNBUSDT", "SOLUSDT"],
+  governance: ["UNIUSDT", "AAVEUSDT", "MKRUSDT"],
+  nft: ["APEUSDT", "MANAUSDT", "SANDUSDT"],
+  privacy: ["XMRUSDT", "ZECUSDT"],
+  smart_contract: ["ETHUSDT", "ADAUSDT", "SOLUSDT", "AVAXUSDT"],
+  enterprise: ["XRPUSDT", "XLMUSDT"],
+  defi: ["UNIUSDT", "AAVEUSDT", "CRVUSDT", "COMPUSDT"],
+  ai: ["RNDRUSDT", "FETUSDT", "GRTUSDT", "INJUSDT", "AGIXUSDT"],
+};
 
-  // Vérifier si le token Facebook existe déjà
-  const existingToken = await prisma.cryptoSystemConfig.findUnique({
-    where: { configKey: 'facebook_access_token' }
+// Règles financières spécifiques par catégorie (fallback -> balanced)
+const CATEGORY_RULES: Record<
+  string,
+  { initial: number; maxPos: number; risk: number; leverage: number }
+> = {
+  payment: { initial: 9000, maxPos: 600, risk: 0.015, leverage: 5 },
+  stablecoin: { initial: 5000, maxPos: 200, risk: 0.005, leverage: 2 },
+  utility: { initial: 9500, maxPos: 650, risk: 0.018, leverage: 6 },
+  governance: { initial: 8000, maxPos: 500, risk: 0.017, leverage: 5 },
+  nft: { initial: 6000, maxPos: 350, risk: 0.022, leverage: 4 },
+  privacy: { initial: 7000, maxPos: 400, risk: 0.02, leverage: 5 },
+  smart_contract: { initial: 10000, maxPos: 700, risk: 0.02, leverage: 6 },
+  enterprise: { initial: 7500, maxPos: 450, risk: 0.015, leverage: 4 },
+  defi: { initial: 8500, maxPos: 550, risk: 0.02, leverage: 5 },
+  ai: { initial: 9000, maxPos: 600, risk: 0.022, leverage: 6 },
+};
+
+async function upsertInvestor(i: SeedInvestor) {
+  await prisma.investorProfile.upsert({
+    where: { name: i.name },
+    update: {
+      symbols: i.symbols,
+      strategyName: i.strategyName,
+      filter: i.filter,
+      period: i.period,
+      leverage: i.leverage,
+      marginMode: i.marginMode,
+      position: i.position ?? undefined,
+      exit: i.exit ?? null,
+      initialBalance: i.initialBalance,
+      maxPositionSize: i.maxPositionSize,
+      riskTolerance: i.riskTolerance,
+      isActive: i.isActive ?? true,
+      type: i.type,
+      riskMin: i.riskMin ?? null,
+      riskMax: i.riskMax ?? null,
+    },
+    create: {
+      name: i.name,
+      type: i.type,
+      symbols: i.symbols,
+      strategyName: i.strategyName,
+      filter: i.filter,
+      period: i.period,
+      leverage: i.leverage,
+      marginMode: i.marginMode,
+      position: i.position ?? null,
+      exit: i.exit ?? null,
+      initialBalance: i.initialBalance,
+      maxPositionSize: i.maxPositionSize,
+      riskTolerance: i.riskTolerance,
+      isActive: i.isActive ?? true,
+      riskMin: i.riskMin ?? null,
+      riskMax: i.riskMax ?? null,
+    },
   });
-
-  if (!existingToken) {
-    // Insérer le token Facebook seulement s'il n'existe pas
-    const facebookToken = 'EAAKxGeDzL3gBPIl6XB5UVcjTZBSeycI1cMKjfnfnSX40w4ZAbmMoRKK4tmLcHPDY2TMI79Oh5KZCMegd5RQedzjZCgKx89PZB7nU8SmS4uaZBcy4ToKKomAZC8ZAOATXYbz5uaIDiOudAIawwHtZBSFdaCQV29Bmfa5zNEmZBt6ZCgZCiBeYBynwzVdIDtuayB22wW4R';
-    
-    await prisma.cryptoSystemConfig.create({
-      data: {
-        configKey: 'facebook_access_token',
-        configValue: facebookToken,
-        description: 'Token d\'accès Facebook pour la publication automatique',
-        isActive: true
-      }
-    });
-
-    console.log('✅ Token Facebook ajouté à la base de données');
-  } else {
-    console.log('ℹ️ Token Facebook déjà présent dans la base de données');
-  }
 }
 
-async function seedInvestorProfiles() {
-  console.log('👥 Seeding investor profiles...');
+export async function main() {
+  console.log("Seeding investors...");
 
-  // Créer ou mettre à jour tous les profils de la factory
-  const defaultProfiles = InvestorProfileFactory.createProfiles();
-  console.log(`📝 Synchronisation de ${defaultProfiles.length} profils d'investisseurs...`);
+  const getIntervalId = (p: unknown): string => {
+    if (!p) return "1H";
+    const obj = p as { futureIntervalId?: string; spotIntervalId?: string };
+    return obj.futureIntervalId || obj.spotIntervalId || "1H";
+  };
 
-  let upsertedCount = 0;
-
-  for (const profile of defaultProfiles) {
+  // Pour obtenir les presets nous fabriquons un InvestorAgent factice par type et lisons le résultat
+  // via InvestorFactory.fromInvestor (qui applique les defaults de PRESETS).
+  for (const type of INVESTOR_TYPES) {
+    // Construction d'un agent minimal
+    // Agent minimal conforme à InvestorAgent (propriétés supplémentaires neutres)
+    const agent = {
+      id: `seed-${type}`,
+      name: type,
+      type: type,
+      riskTolerance: 0.01,
+      maxPositionSize: 0,
+      holdingPeriod: 0,
+      cooldown: 0,
+      lastActive: new Date(),
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
     try {
-      await prisma.investorProfile.upsert({
-        where: { id: profile.id },
-        update: profile,
-        create: profile,
+      const composition = InvestorFactory.fromInvestor(
+        agent,
+        DEFAULT_SYMBOLS,
+        {}
+      );
+      const firstGroup = composition.groups[0];
+      const leverage = firstGroup.margeLeverage as number;
+      const periodValue = getIntervalId(firstGroup.period);
+      const strategyName = firstGroup.indicator.type;
+      const filterInstance = firstGroup.filter;
+      const filterName = filterInstance.constructor?.name || "UnknownFilter";
+      const marginMode = firstGroup.marginMode ?? MixMarginModeEnum.CROSSED;
+      const position = firstGroup.position ?? null;
+
+      const fin = FIN_RULES[type] || {
+        initial: 5000,
+        maxPos: 300,
+        risk: 0.015,
+      };
+
+      await upsertInvestor({
+        name: type,
+        type: "future",
+        symbols: DEFAULT_SYMBOLS,
+        strategyName,
+        filter: filterName,
+        period: periodValue,
+        leverage,
+        marginMode: String(marginMode),
+        position: position ? String(position) : null,
+        exit: firstGroup.exit === true ? true : undefined,
+        initialBalance: fin.initial,
+        maxPositionSize: fin.maxPos,
+        riskTolerance: fin.risk,
+        isActive: true,
+        riskMin: composition.riskRange ? composition.riskRange[0] : null,
+        riskMax: composition.riskRange ? composition.riskRange[1] : null,
       });
-      upsertedCount++;
-      console.log(`✅ Profil synchronisé: ${profile.name} (${profile.type})`);
-    } catch (error) {
-      console.error(`❌ Erreur lors de la synchronisation du profil ${profile.name}:`, error);
+      console.log(`✔ Seeded investor ${type}`);
+    } catch (e) {
+      console.error(
+        `❌ Failed seeding investor ${type}:`,
+        (e as Error).message
+      );
     }
   }
 
-  console.log(`🎯 ${upsertedCount}/${defaultProfiles.length} profils d'investisseurs synchronisés`);
-}
-
-async function seedCryptoGemState() {
-  console.log('⚙️ Seeding crypto gem state...');
-
-  // Vérifier si un état existe déjà
-  const existingState = await prisma.cryptoGemState.findFirst();
-
-  if (!existingState) {
-    await prisma.cryptoGemState.create({
-      data: {
-        currentPage: 1,
-        maxPages: 20,
-        batchSize: 100,
-        lastCycleStart: new Date(),
-        processPhase: 'FETCH',
-        isProcessing: false
-      }
-    });
-    console.log('✅ État initial du système CryptoGem créé');
-  } else {
-    console.log('ℹ️ État du système CryptoGem déjà présent');
-  }
-}
-
-async function seedAdditionalConfigs() {
-  console.log('🔧 Seeding additional configurations...');
-
-  const additionalConfigs = [
-    {
-      configKey: 'telegram_enabled',
-      configValue: 'true',
-      description: 'Activer les notifications Telegram',
-      isActive: true
-    },
-    {
-      configKey: 'email_notifications_enabled',
-      configValue: 'true',
-      description: 'Activer les notifications par email',
-      isActive: true
-    },
-    {
-      configKey: 'max_daily_investments',
-      configValue: '50',
-      description: 'Nombre maximum d\'investissements par jour',
-      isActive: true
-    },
-    {
-      configKey: 'risk_management_enabled',
-      configValue: 'true',
-      description: 'Activer la gestion des risques',
-      isActive: true
-    },
-    {
-      configKey: 'simulation_mode',
-      configValue: 'true',
-      description: 'Mode simulation (pas de vrais investissements)',
-      isActive: true
-    },
-    {
-      configKey: 'market_analysis_interval',
-      configValue: '3600',
-      description: 'Intervalle d\'analyse du marché en secondes',
-      isActive: true
-    },
-    {
-      configKey: 'newsletter_sender_email',
-      configValue: 'noreply@crypto-agent.com',
-      description: 'Email d\'expédition de la newsletter',
-      isActive: true
-    },
-    {
-      configKey: 'facebook_page_id',
-      configValue: '61566156652015',
-      description: 'ID de la page Facebook pour les publications',
-      isActive: true
-    }
-  ];
-
-  for (const config of additionalConfigs) {
-    const existing = await prisma.cryptoSystemConfig.findUnique({
-      where: { configKey: config.configKey }
-    });
-
-    if (!existing) {
-      await prisma.cryptoSystemConfig.create({ data: config });
-      console.log(`✅ Configuration ajoutée: ${config.configKey}`);
-    } else {
-      console.log(`ℹ️ Configuration déjà présente: ${config.configKey}`);
+  // Ajout des investisseurs par catégorie macro
+  console.log("Seeding category investors...");
+  for (const category of Object.keys(CATEGORY_SYMBOLS)) {
+    const symbols = CATEGORY_SYMBOLS[category];
+    const rule = CATEGORY_RULES[category] || {
+      initial: 8000,
+      maxPos: 500,
+      risk: 0.015,
+      leverage: 5,
+    };
+    // On réutilise InvestorFactory avec un type inconnu -> fallback preset balanced
+    const pseudoProfile = {
+      id: `cat-${category}`,
+      name: `cat_${category}`,
+      type: category,
+    };
+    try {
+      const composition = InvestorFactory.fromInvestor(pseudoProfile, symbols, {
+        leverage: rule.leverage,
+      });
+      const group = composition.groups[0];
+      await upsertInvestor({
+        name: `cat_${category}`,
+        type: "future",
+        symbols,
+        strategyName: group.indicator.type,
+        filter: group.filter.constructor?.name || "StandardFilter",
+        period: getIntervalId(group.period),
+        leverage: group.margeLeverage as number,
+        marginMode: String(group.marginMode || MixMarginModeEnum.CROSSED),
+        position: group.position ? String(group.position) : null,
+        exit: group.exit === true ? true : undefined,
+        initialBalance: rule.initial,
+        maxPositionSize: rule.maxPos,
+        riskTolerance: rule.risk,
+        isActive: true,
+        riskMin: composition.riskRange ? composition.riskRange[0] : null,
+        riskMax: composition.riskRange ? composition.riskRange[1] : null,
+      });
+      console.log(`✔ Seeded category investor cat_${category}`);
+    } catch (e) {
+      console.error(
+        `❌ Failed seeding category ${category}`,
+        (e as Error).message
+      );
     }
   }
+
+  console.log("Seed investors complete.");
 }
 
-main()
-  .then(() => {
-    console.log('🎉 Database seeded successfully!');
-  })
-  .catch((e) => {
-    console.error('❌ Error seeding database:', e);
-    // Ne pas faire échouer le processus si c'est juste un problème de données existantes
-    if (e.message && (
-      e.message.includes('Unique constraint') || 
-      e.message.includes('already exists') ||
-      e.message.includes('duplicate key')
-    )) {
-      console.log('ℹ️ Données déjà présentes, pas de problème');
-      process.exit(0);
-    } else {
+// Exécution directe (ESM friendly)
+const thisFile = fileURLToPath(import.meta.url);
+if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
+  main()
+    .catch((e) => {
+      console.error(e);
       process.exit(1);
-    }
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

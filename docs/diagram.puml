@@ -1,0 +1,36 @@
+@startuml
+skinparam monochrome true
+skinparam defaultFontName Courier
+
+rectangle "Netlify Cron\ncron-run-dev" as Cron
+rectangle "runDev()" as RunDev
+rectangle "Runner" as Runner
+rectangle "Trader" as Trader
+rectangle "HandleTrader" as Handle
+package Strategy {
+  [getStrategy]
+  [Filters]
+}
+package Accounts {
+  [FutureAccount]
+  [FutureInvestorAccount]
+  [SpotAccount]
+}
+package Persistence_dev_only {
+  [persistOrder]
+  [persistPositions]
+}
+
+Cron --> RunDev
+RunDev --> Runner
+Runner --> Trader
+Trader --> Handle
+Handle --> getStrategy
+Handle --> Filters
+Handle --> FutureAccount
+Handle --> FutureInvestorAccount
+Handle --> SpotAccount
+FutureInvestorAccount --> persistOrder : DEV only
+FutureInvestorAccount --> persistPositions : DEV only
+
+@enduml

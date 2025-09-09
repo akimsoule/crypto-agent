@@ -1,30 +1,22 @@
-import { FacebookService } from '../src/services/FacebookService.ts';
-import { HttpService } from '../src/services/HttpService.ts';
-import { withDashboardAuth } from './middleware/dashBoardMiddleware.mts';
+import { endpoint } from './_lib/middleware.mts'
 
-const handler = async (request: Request, context: any): Promise<Response> => {
-  if (request.method !== 'GET') {
-    return HttpService.createErrorResponse('Method not allowed', 405);
-  }
+// Endpoint: GET /api/facebook-stats
+// Retourne un petit état de quota basé sur logs.
 
-  const facebookService = new FacebookService();
-
-  try {
-    const result = await facebookService.getStats();
-
-    if (!result.success) {
-      return HttpService.createErrorResponse(result.error || 'Erreur lors de la récupération des stats', 500);
+export default endpoint({
+  methods: ['GET'],
+  auth: true,
+  handler: async ({ prisma }) => {
+    const start = new Date(); start.setHours(0,0,0,0)
+    const end = new Date(); end.setHours(23,59,59,999)
+    const postsToday = await prisma.facebookPostLog.count({ where: { createdAt: { gte: start, lte: end } } })
+    const lastPost = await prisma.facebookPostLog.findFirst({ orderBy: { createdAt: 'desc' } })
+    return {
+      postsToday,
+      maxPostsPerDay: 10,
+      lastPostTime: lastPost?.createdAt ?? null,
+      minTimeBetweenPosts: 10,
+      duplicateThreshold: 2,
     }
-
-    return HttpService.createSuccessResponse(result.data);
-
-  } catch (error) {
-    console.error('❌ Erreur lors de la récupération des stats Facebook:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-    return HttpService.createErrorResponse(errorMessage, 500);
-  } finally {
-    await facebookService.disconnect();
   }
-};
-
-export default withDashboardAuth(handler);
+})

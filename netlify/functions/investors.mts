@@ -1,35 +1,28 @@
-import { Context } from '@netlify/functions'
-import { InvestorService, HttpService } from '../src/services';
+import { endpoint } from './_lib/middleware.mts'
 
-const handler = async (request: Request, context: Context) => {
-  const headers = HttpService.getCorsHeadersForMethods(['GET', 'OPTIONS']);
-
-  // Gérer les requêtes OPTIONS (preflight)
-  if (request.method === "OPTIONS") {
-    return HttpService.handleOptions(headers);
+export default endpoint({
+  methods: ['GET'],
+  auth: false,
+  handler: async ({ prisma }) => {
+    const profiles = await prisma.investorProfile.findMany({ where: { isActive: true }, orderBy: { createdAt: 'asc' } })
+    return profiles.map(p => ({
+      id: p.id,
+      name: p.name,
+      type: p.type,
+      riskTolerance: p.riskTolerance ?? 0,
+      maxPositionSize: p.maxPositionSize ?? 0,
+      holdingPeriod: 0,
+      sellThreshold: 0,
+      stopLoss: 0,
+      sentimentWeight: 0,
+      technicalWeight: 0,
+      description: p.strategyName,
+      initialBalance: p.initialBalance ?? 0,
+      isActive: p.isActive,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      investments: [],
+      portfolioSnapshots: [],
+    }))
   }
-
-  if (request.method !== "GET") {
-    return HttpService.createMethodNotAllowedResponse(['GET'], headers);
-  }
-
-  const investorService = new InvestorService();
-
-  try {
-    const result = await investorService.getInvestors();
-
-    if (result.success) {
-      return HttpService.createSuccessResponse(result.data, undefined, 200, headers);
-    } else {
-      return HttpService.createErrorResponse(result.error || 'Erreur lors de la récupération', 500, headers);
-    }
-
-  } catch (error) {
-    console.error('Erreur lors de la récupération des investisseurs:', error);
-    return HttpService.createErrorResponse('Erreur interne du serveur', 500, headers);
-  } finally {
-    await investorService.disconnect();
-  }
-}
-
-export default handler;
+})

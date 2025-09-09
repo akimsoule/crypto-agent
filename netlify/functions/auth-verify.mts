@@ -1,49 +1,24 @@
-import { AuthService, HttpService } from '../src/services';
+import jwt from 'jsonwebtoken'
+import { endpoint, json } from './_lib/middleware.mts'
 
-const handler = async (request: Request) => {
-  const headers = HttpService.getCorsHeadersForMethods(['GET', 'OPTIONS']);
-
-  // Gérer les requêtes OPTIONS (preflight)
-  if (request.method === 'OPTIONS') {
-    return HttpService.handleOptions(headers);
-  }
-
-  if (request.method !== 'GET') {
-    return HttpService.createMethodNotAllowedResponse(['GET'], headers);
-  }
-
-  try {
-    const authService = new AuthService();
-    
-    // Récupérer le token depuis l'header Authorization
-    const authHeader = request.headers.get('Authorization') ?? undefined;
-    const token = authService.extractBearerToken(authHeader);
-    
-    if (!token) {
-      return HttpService.createUnauthorizedResponse(
-        'Token manquant ou format incorrect',
-        headers
-      );
+export default endpoint({
+  methods: ['GET'],
+  auth: false,
+  handler: async ({ req }) => {
+    const JWT_SECRET = process.env.JWT_SECRET
+    if (!JWT_SECRET) {
+      return json({ success: false, error: 'JWT_SECRET manquant côté serveur' }, 500)
     }
-
-    const result = await authService.verifyToken(token);
-
-    if (result.success && result.valid) {
-      return HttpService.createSuccessResponse({
-        valid: true,
-        user: result.user
-      }, 'Token valide', 200, headers);
-    } else {
-      return HttpService.createUnauthorizedResponse(result.error, headers);
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { valid: false }
     }
-
-  } catch (error) {
-    console.error('❌ Erreur lors de la vérification du token:', error);
-    return HttpService.createUnauthorizedResponse(
-      'Token invalide ou expiré',
-      headers
-    );
+    const token = authHeader.slice('Bearer '.length).trim()
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as { sub: string; username: string; role?: string }
+      return { valid: true, user: { id: decoded.sub, username: decoded.username, role: decoded.role || 'user' } }
+    } catch {
+      return { valid: false }
+    }
   }
-};
-
-export default handler;
+})

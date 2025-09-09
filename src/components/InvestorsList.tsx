@@ -249,7 +249,7 @@ export default function InvestorsList() {
 
       {/* Modal de détails de l'investisseur */}
       <dialog id="investor_detail_modal" className="modal">
-        <div className="modal-box w-11/12 max-w-4xl">
+        <div className="modal-box w-full max-w-[100vw] sm:max-w-3xl lg:max-w-4xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto overscroll-contain">
           <form method="dialog">
             <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
           </form>
@@ -257,64 +257,52 @@ export default function InvestorsList() {
           {selectedInvestor && (
             <>
               {/* Header du modal */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className="text-4xl">{getInvestorAvatar(selectedInvestor.type)}</div>
-                <div>
-                  <h3 className="font-bold text-2xl">{selectedInvestor.name}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="badge badge-outline">{selectedInvestor.type}</div>
-                    <div className="badge badge-primary">
-                      ID: {selectedInvestor.id.slice(0, 8)}...
+              <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-3 sm:gap-4 mb-4">
+                <div className="text-3xl sm:text-4xl leading-none shrink-0">{getInvestorAvatar(selectedInvestor.type)}</div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-bold text-xl sm:text-2xl leading-tight break-words max-w-full">{selectedInvestor.name}</h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-1 text-xs sm:text-sm">
+                    <div className="badge badge-outline badge-sm whitespace-nowrap">{selectedInvestor.type}</div>
+                    <div className="badge badge-primary badge-sm truncate max-w-[160px]">
+                      ID: {selectedInvestor.id}
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Statistiques détaillées */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4 mb-5">
                 {selectedInvestor.portfolioSnapshots[0] && (
                   <>
-                    <div className="stat bg-base-200 rounded-lg p-4">
-                      <div className="stat-figure text-primary">
-                        <TrendingUp className="w-6 h-6" />
-                      </div>
-                      <div className="stat-title">Performance totale</div>
-                      <div className={`stat-value ${
-                        selectedInvestor.portfolioSnapshots[0].totalReturnPercent >= 0 ? 'text-success' : 'text-error'
-                      }`}>
+                    <div className="stat bg-base-200 rounded-lg p-3 sm:p-4 min-w-0">
+                      <div className="stat-figure text-primary"><TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" /></div>
+                      <div className="stat-title text-[10px] sm:text-xs">Performance</div>
+                      <div className={`text-sm sm:text-xl font-semibold ${selectedInvestor.portfolioSnapshots[0].totalReturnPercent >= 0 ? 'text-success' : 'text-error'}`}> 
                         {selectedInvestor.portfolioSnapshots[0].totalReturnPercent >= 0 ? '+' : ''}
                         {selectedInvestor.portfolioSnapshots[0].totalReturnPercent.toFixed(2)}%
                       </div>
                     </div>
 
-                    <div className="stat bg-base-200 rounded-lg p-4">
-                      <div className="stat-figure text-info">
-                        <Activity className="w-6 h-6" />
-                      </div>
-                      <div className="stat-title">Taux de réussite</div>
-                      <div className="stat-value text-info">
-                        {selectedInvestor.portfolioSnapshots[0].winRate.toFixed(1)}%
-                      </div>
+                    <div className="stat bg-base-200 rounded-lg p-3 sm:p-4 min-w-0">
+                      <div className="stat-figure text-info"><Activity className="w-5 h-5 sm:w-6 sm:h-6" /></div>
+                      <div className="stat-title text-[10px] sm:text-xs">Taux réussite</div>
+                      <div className="text-sm sm:text-xl font-semibold text-info">{selectedInvestor.portfolioSnapshots[0].winRate.toFixed(1)}%</div>
                     </div>
 
-                    <div className="stat bg-base-200 rounded-lg p-4">
-                      <div className="stat-figure text-warning">
-                        <DollarSign className="w-6 h-6" />
-                      </div>
-                      <div className="stat-title">Positions actives</div>
-                      <div className="stat-value text-warning">
-                        {selectedInvestor.portfolioSnapshots[0].activePositions}
-                      </div>
+                    <div className="stat bg-base-200 rounded-lg p-3 sm:p-4 min-w-0">
+                      <div className="stat-figure text-warning"><DollarSign className="w-5 h-5 sm:w-6 sm:h-6" /></div>
+                      <div className="stat-title text-[10px] sm:text-xs">Positions</div>
+                      <div className="text-sm sm:text-xl font-semibold text-warning">{selectedInvestor.portfolioSnapshots[0].activePositions}</div>
                     </div>
 
-                    <div className="stat bg-base-200 rounded-lg p-4">
+                    <div className="stat bg-base-200 rounded-lg p-3 sm:p-4 min-w-0">
                       <div className="stat-figure text-secondary">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                         </svg>
                       </div>
-                      <div className="stat-title">Valeur du portefeuille</div>
-                      <div className="stat-value text-secondary">
+                      <div className="stat-title text-[10px] sm:text-xs">Valeur</div>
+                      <div className="text-sm sm:text-xl font-semibold text-secondary break-all max-w-[130px] sm:max-w-none">
                         ${selectedInvestor.portfolioSnapshots[0].totalValue.toLocaleString()}
                       </div>
                     </div>
@@ -325,13 +313,13 @@ export default function InvestorsList() {
               {/* Historique des investissements */}
               <div className="mb-6">
                 <h4 className="font-semibold text-lg mb-4">Derniers Investissements</h4>
-                <div className="overflow-x-auto">
-                  <table className="table table-zebra">
+                <div className="overflow-x-auto -mx-2 sm:mx-0 border border-base-200 rounded-lg">
+                  <table className="table table-zebra min-w-full text-xs sm:text-sm">
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Crypto</th>
-                        <th>ID Coin</th>
+                        <th className="whitespace-nowrap">Date</th>
+                        <th className="whitespace-nowrap">Crypto</th>
+                        <th className="whitespace-nowrap">ID Coin</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -349,7 +337,7 @@ export default function InvestorsList() {
                           <td>
                             <div className="font-semibold">{investment.symbol}</div>
                           </td>
-                          <td className="font-mono text-sm text-base-content/70">
+                          <td className="font-mono text-[10px] sm:text-sm text-base-content/70 break-all max-w-[100px] sm:max-w-[160px]">
                             {investment.coinId}
                           </td>
                         </tr>

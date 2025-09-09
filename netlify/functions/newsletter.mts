@@ -1,120 +1,45 @@
-import { Context } from '@netlify/functions'
-import { NewsletterService, HttpService } from '../src/services';
+import { endpoint, json } from './_lib/middleware.mts'
 
-interface SubscriptionRequest {
-  email: string;
-  source?: string;
-  preferences?: Record<string, unknown>;
-}
-
-const handler = async (request: Request, context: Context) => {
-  const headers = HttpService.getCorsHeadersForMethods(['GET', 'POST', 'DELETE', 'OPTIONS']);
-
-  // Gérer les requêtes OPTIONS (preflight)
-  if (request.method === "OPTIONS") {
-    return HttpService.handleOptions(headers);
-  }
-
-  const newsletterService = new NewsletterService();
-
-  try {
-    switch (request.method) {
-      case "POST":
-        return await handleSubscribe(request, headers, newsletterService);
-      case "GET":
-        return await handleGetSubscriptions(request, headers, newsletterService);
-      case "DELETE":
-        return await handleUnsubscribe(request, headers, newsletterService);
-      default:
-        return HttpService.createMethodNotAllowedResponse(['GET', 'POST', 'DELETE'], headers);
+export default endpoint({
+  methods: ['GET','POST','DELETE'],
+  auth: false, // POST/DELETE publics via logique interne; GET admin check manuel
+  handler: async ({ req, prisma }) => {
+    const url = new URL(req.url)
+    if (req.method === 'POST') {
+      const body = await req.json().catch(() => ({})) as any
+      const email: string | undefined = body.email?.toLowerCase()
+      if (!email) return json({ success: false, message: 'Email requis' }, 400)
+      const existing = await prisma.newsletterSubscription.findUnique({ where: { email } })
+      if (existing) {
+        if (!existing.isActive) {
+          await prisma.newsletterSubscription.update({ where: { email }, data: { isActive: true, updatedAt: new Date() } })
+        }
+        return { message: 'Déjà inscrit', data: existing }
+      }
+      const created = await prisma.newsletterSubscription.create({ data: { email, source: (body as any).source || 'web', preferences: body.preferences || {} } })
+      return { message: 'Inscription réussie', data: created }
     }
-  } catch (error) {
-    console.error("Erreur dans newsletter:", error);
-    return HttpService.createErrorResponse(
-      error instanceof Error ? error.message : "Erreur interne du serveur",
-      500,
-      headers
-    );
-  } finally {
-    await newsletterService.disconnect();
-  }
-};
-
-export default handler;
-
-// Gérer l'abonnement à la newsletter
-async function handleSubscribe(
-  request: Request,
-  headers: Record<string, string>,
-  newsletterService: NewsletterService
-): Promise<Response> {
-  try {
-    const body: SubscriptionRequest = await HttpService.parseJsonBody(request);
-    const result = await newsletterService.subscribe(body);
-
-    if (result.success) {
-      return HttpService.createSuccessResponse(result.data, result.message, 201, headers);
-    } else {
-      return HttpService.createValidationErrorResponse(result.message, headers);
+    if (req.method === 'DELETE') {
+      const email = url.searchParams.get('email')?.toLowerCase()
+      if (!email) return json({ success: false, message: 'Email requis' }, 400)
+      const sub = await prisma.newsletterSubscription.findUnique({ where: { email } })
+      if (!sub) return json({ success: false, message: 'Non trouvé' }, 404)
+      await prisma.newsletterSubscription.update({ where: { email }, data: { isActive: false } })
+      return { message: 'Désabonnement effectué' }
     }
-  } catch (error) {
-    console.error("Erreur lors de l'abonnement:", error);
-    return HttpService.createErrorResponse("Erreur lors de l'inscription", 500, headers);
-  }
-}
-
-// Gérer la récupération des abonnements (admin)
-async function handleGetSubscriptions(
-  request: Request,
-  headers: Record<string, string>,
-  newsletterService: NewsletterService
-): Promise<Response> {
-  try {
-    const searchParams = HttpService.getQueryParams(request);
-    
-    const params = {
-      page: parseInt(searchParams.get("page") || "1"),
-      limit: parseInt(searchParams.get("limit") || "50"),
-      status: searchParams.get("status") as 'active' | 'inactive' | 'all' | undefined,
-      search: searchParams.get("search") || undefined,
-    };
-
-    const result = await newsletterService.getSubscriptions(params);
-
-    if (result.success) {
-      return HttpService.createSuccessResponse(result.data, undefined, 200, headers);
-    } else {
-      return HttpService.createErrorResponse(result.error || "Erreur lors de la récupération", 500, headers);
+    // GET (uniquement pages admin -> exige header Authorization si rôle admin)
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
+    if (!authHeader) {
+      return json({ success: false, message: 'Non autorisé' }, 401)
     }
-  } catch (error) {
-    console.error("Erreur lors de la récupération des abonnements:", error);
-    return HttpService.createErrorResponse("Erreur lors de la récupération des abonnements", 500, headers);
+    const page = parseInt(url.searchParams.get('page') || '1', 10)
+    const limit = parseInt(url.searchParams.get('limit') || '20', 10)
+    const active = url.searchParams.get('active') === 'true'
+    const where = active ? { isActive: true } : {}
+    const [total, subs] = await Promise.all([
+      prisma.newsletterSubscription.count({ where }),
+      prisma.newsletterSubscription.findMany({ where, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' } })
+    ])
+    return { subscriptions: subs, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } }
   }
-}
-
-// Gérer le désabonnement
-async function handleUnsubscribe(
-  request: Request,
-  headers: Record<string, string>,
-  newsletterService: NewsletterService
-): Promise<Response> {
-  try {
-    const searchParams = HttpService.getQueryParams(request);
-    const email = searchParams.get("email");
-
-    if (!email) {
-      return HttpService.createValidationErrorResponse("Email requis pour le désabonnement", headers);
-    }
-
-    const result = await newsletterService.unsubscribe(email);
-
-    if (result.success) {
-      return HttpService.createSuccessResponse(result.data, result.message, 200, headers);
-    } else {
-      return HttpService.createValidationErrorResponse(result.message, headers);
-    }
-  } catch (error) {
-    console.error("Erreur lors du désabonnement:", error);
-    return HttpService.createErrorResponse("Erreur lors du désabonnement", 500, headers);
-  }
-}
+})

@@ -44,13 +44,3 @@
   # Optimisation des fonctions
   [functions."*"]
     node_bundler = "esbuild"
-
-# Note: Les scheduled functions peuvent être configurées via l'interface Netlify
-# ou via des webhooks externes comme GitHub Actions / Zapier
-# 
-# Exemples de scheduling:
-# - Newsletter: Tous les lundis à 9h UTC 
-# - Gem Hunter: Toutes les 4 heures
-# - Investor Watch: Toutes les 2 heures  
-# - Monitoring: Tous les jours à minuit UTC
-# - Cleanup: Tous les dimanches à 2h UTC
