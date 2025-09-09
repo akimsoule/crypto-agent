@@ -15,7 +15,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "deploy:local": "APP_ENV=development ./scripts/deploy.sh",
     "runDev": "tsx netlify/trade.app/src/main/Second/Prod/runDev.ts",
-    "dev:cron:once": "tsx scripts/dev-cron-once.ts"
+  "dev:cron:once": "tsx scripts/dev-cron-once.ts",
+  "runProdLocal": "APP_ENV=production tsx scripts/dev-cron-once.ts",
+  "runDevCharts": "SHOW_ASCII=1 tsx netlify/trade.app/src/main/Second/Prod/runDev.ts"
   },
   "dependencies": {
     "@netlify/functions": "^3.1.10",

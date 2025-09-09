@@ -193,8 +193,8 @@ class Trader extends HandleTrader {
       // (graph inutilisé; retiré pour éviter confusion et allocations inutiles)
 
       await this.logRoe(asset, symbol);
-      // Affiche le mini chart uniquement en production pour limiter le bruit en DEV
-  if (process.env.APP_ENV === Profile.PROD) {
+      // Affiche le mini chart si production ou si SHOW_ASCII est défini (debug local)
+      if (process.env.APP_ENV === Profile.PROD || process.env.SHOW_ASCII) {
         this.logChart(asset);
       }
     } catch (error) {

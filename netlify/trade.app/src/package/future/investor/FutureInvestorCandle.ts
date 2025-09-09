@@ -114,7 +114,15 @@ class FutureInvestorCandle implements Candle {
             continue;
           }
         }
-        if (!candles || !candles.length) throw new Error(`Aucune bougie disponible pour ${symbol} ${period.futureIntervalId}`);
+        if (!candles || !candles.length) {
+          const msg = `no_candles symbol=${symbol} period=${period.futureIntervalId} providersTried=${this.getProviders().length}`;
+          const isProd = this.config.botParameter.isProdEnv() || process.env.APP_ENV === 'production';
+          if (isProd) {
+            console.warn('[md] warn', msg);
+            return [] as Candlestick[];
+          }
+          throw new Error(`Aucune bougie disponible pour ${symbol} ${period.futureIntervalId}`);
+        }
         const expiry = now + FutureInvestorCandle.ttl(period);
         FutureInvestorCandle.CACHE.set(key, { expiry, candles });
         return candles;
@@ -135,6 +143,12 @@ class FutureInvestorCandle implements Candle {
     limit: number
   ): Promise<Asset> {
     const candles = await this.getCandles(symbol, period, before, limit);
+    if (!candles || candles.length === 0) {
+      // Asset vide: on retourne une structure vide cohérente pour éviter les erreurs plus loin.
+      return {
+        dates: [], openings: [], closings: [], highs: [], lows: [], volumes: []
+      } as Asset;
+    }
     const asset: Asset = {
       dates: candles.map((c) => Util.intToLocalDateTime(c.ts)),
       openings: candles.map((c) => c.open),

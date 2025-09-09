@@ -10,28 +10,26 @@ import {
   Profile,
 } from "./MapperType";
 
-class CustomTelegramBot extends TelegramBot {
-  private botParameter: BotParameter;
+// Wrapper léger pour éviter problèmes d'héritage/ESM et rendre l'appel no-op hors prod
+interface TelegramLike {
+  sendMessage(chatId: string | number, text: string): Promise<unknown>;
+}
 
-  constructor(
-    token: string,
-    botParameter: BotParameter,
-    options?: TelegramBot.ConstructorOptions
-  ) {
-    super(token, options);
-    this.botParameter = botParameter;
+class SafeTelegram {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private inner: TelegramLike | null;
+  private enabled: boolean;
+  constructor(token: string | undefined, enabled: boolean) {
+    this.enabled = Boolean(token && enabled);
+  // On cast en unknown puis TelegramLike pour isoler l'usage minimal
+  this.inner = this.enabled && token ? (new (TelegramBot as unknown as { new(token: string, opts?: unknown): TelegramLike })(token, { polling: false }) as unknown as TelegramLike) : null;
   }
-
-  sendMessage(
-    chatId: TelegramBot.ChatId,
-    text: string,
-    options?: TelegramBot.SendMessageOptions
-  ): Promise<TelegramBot.Message> {
-    if (this.botParameter.isProdEnv()) {
-      return super.sendMessage(chatId, text, options);
-    } else {
-      const message = {} as TelegramBot.Message;
-      return Promise.resolve(message);
+  async sendMessage(chatId: string | number, text: string): Promise<void> {
+    if (!this.inner) return;
+    try {
+      await this.inner.sendMessage(chatId, text);
+    } catch {
+      // silencieux
     }
   }
 }
@@ -40,7 +38,7 @@ class Config {
   public bitgetClientV2: RestClientV2;
   public cachedBitgetClient: CachedBitgetClient;
   public botParameter: BotParameter;
-  public telegramClient: TelegramBot;
+  public telegramClient: SafeTelegram;
   public telegramGroupOrderId: string;
 
   public static MAIN_DEFAULT_CONFIG = (
@@ -78,14 +76,10 @@ class Config {
     this.cachedBitgetClient = new CachedBitgetClient(this.bitgetClientV2);
 
     this.botParameter = new BotParameter(params);
-    this.telegramClient = new CustomTelegramBot(
-      process.env.TELEGRAM_KEY as string,
-      this.botParameter,
-      {
-        polling: false,
-      }
-    );
-    this.telegramGroupOrderId = process.env.TELEGRAM_GROUP_ID as string;
+  const telegramKey = process.env.TELEGRAM_KEY;
+  const telegramGroup = process.env.TELEGRAM_GROUP_ID || '0';
+  this.telegramClient = new SafeTelegram(telegramKey, this.botParameter.isProdEnv());
+  this.telegramGroupOrderId = telegramGroup;
   }
 }
 

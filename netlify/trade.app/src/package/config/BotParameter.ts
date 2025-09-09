@@ -17,17 +17,11 @@ class BotParameter {
   };
 
   isProdEnv = () => {
-    return (
-  process.env.APP_ENV === "production" ||
-      this.params.profiles.includes(Profile.PROD)
-    );
+    return this.params.profiles.includes(Profile.PROD);
   };
 
   isDevEnv = () => {
-    return (
-  process.env.APP_ENV === "development" ||
-      this.params.profiles.includes(Profile.DEV)
-    );
+    return this.params.profiles.includes(Profile.DEV);
   };
 
   isFutureEnv = () => {
