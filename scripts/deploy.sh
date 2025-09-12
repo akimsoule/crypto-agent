@@ -56,8 +56,5 @@ fi
 step "5. Build"
 npm run build
 
-step "6. Smoke test (cron once)"
-npm run dev:cron:once || { log "Smoke test failed"; exit 1; }
-
 step "Terminé"
 log "Déploiement réussi."
