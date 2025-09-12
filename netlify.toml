@@ -12,35 +12,3 @@
   from = "/*"
   to = "/index.html"
   status = 200
-
-# Configuration des fonctions programmées (scheduled functions)
-[functions]
-  external_node_modules = [
-    "prisma", 
-    "@prisma/client",
-    "react",
-    "react-dom", 
-    "@react-email/components",
-    "@react-email/render",
-    "react-email",
-    "@types/node",
-    "typescript",
-    "vite",
-    "@vitejs/plugin-react",
-    "tailwindcss",
-    "autoprefixer",
-    "postcss",
-    "@tanstack/react-query",
-    "chart.js",
-    "react-chartjs-2",
-    "lucide-react",
-    "jsonwebtoken",
-    "nodemailer",
-    "axios",
-    "date-fns",
-    "zod"
-  ]
-  
-  # Optimisation des fonctions
-  [functions."*"]
-    node_bundler = "esbuild"
