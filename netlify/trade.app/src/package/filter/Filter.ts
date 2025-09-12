@@ -393,6 +393,46 @@ class DevFilter extends BaseFilter {
   }
 }
 
+// Filtres dédiés investisseurs
+// - DEV: n’utilise pas FilterProd (autorise les backtests/entrées sur historique), proche de DevFilter
+// - PROD: combinaison stricte de filtres non-dev (similaire à StandardFilter)
+class InvestorDevFilter extends BaseFilter {
+  public filters: AndFilter;
+
+  constructor() {
+    super();
+    this.filters = new AndFilter([new FilterSignal(), new FilterRoi()]);
+  }
+
+  mustEnter(tradeParam: TradeParam): boolean {
+    return this.filters.mustEnter(tradeParam);
+  }
+  mustExit(tradeParam: TradeParam): boolean {
+    return this.filters.mustExit(tradeParam);
+  }
+}
+
+class InvestorProdFilter extends BaseFilter {
+  public filters: AndFilter;
+
+  constructor() {
+    super();
+    this.filters = new AndFilter([
+      new FilterSignal(),
+      new FilterProd(),
+      new FilterRoi(),
+      new FilterPositionNotFar(),
+    ]);
+  }
+
+  mustEnter(tradeParam: TradeParam): boolean {
+    return this.filters.mustEnter(tradeParam);
+  }
+  mustExit(tradeParam: TradeParam): boolean {
+    return this.filters.mustExit(tradeParam);
+  }
+}
+
 export {
   Filter,
   FilterSignal,
@@ -410,4 +450,6 @@ export {
   StandardFilterWithoutNotFar,
   AndFilter,
   OrFilter,
+  InvestorDevFilter,
+  InvestorProdFilter,
 };

@@ -1,4 +1,4 @@
-import { runDev } from '../main/runDev';
+import { runDev } from '../main/Second/Prod/runDev';
 
 runDev()
   .then(() => console.log('runDev terminé'))

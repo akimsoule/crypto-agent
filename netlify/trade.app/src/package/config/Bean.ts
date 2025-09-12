@@ -29,8 +29,8 @@ class BeanInvestor {
 
 	constructor(config: Config, investor: InvestorProfile) {
 		// Future side: DB-backed investor account + Coinpaprika candles
-		const futureAccount = new FutureInvestorAccount(investor.id);
 		const futureCandle = new FutureInvestorCandle(config);
+		const futureAccount = new FutureInvestorAccount(investor.id, futureCandle);
 		this.futureTrader = new Trader(config, futureAccount, futureCandle);
 
 		// Spot side: keep standard spot components (not used in our flow, but required by Runner types)

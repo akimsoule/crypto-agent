@@ -151,6 +151,7 @@ class Trader extends HandleTrader {
         strategyResult.length,
         asset.closings.length
       );
+
       for (let index = 0; index < executionLength; index++) {
         const actionLong = strategyResult.longStrategy[index];
         const actionShort = strategyResult.shortStrategy[index];
@@ -194,7 +195,7 @@ class Trader extends HandleTrader {
 
       await this.logRoe(asset, symbol);
       // Affiche le mini chart si production ou si SHOW_ASCII est défini (debug local)
-      if (process.env.APP_ENV === Profile.PROD || process.env.SHOW_ASCII) {
+      if (this.config.botParameter.isProdEnv()) {
         this.logChart(asset);
       }
     } catch (error) {
@@ -294,6 +295,17 @@ class Trader extends HandleTrader {
         MixHoldSideEnum.SHORT
       );
       await this.account.init(group, symbol, [initPosLong, initPosShort]);
+    } else if (this.account instanceof FutureInvestorAccount) {
+      // Important: affecter le group pour activer le filtre/config
+      this.account.setGroup(group);
+      initPosLong = await this.account.getCurrentPosition(
+        symbol,
+        MixHoldSideEnum.LONG
+      );
+      initPosShort = await this.account.getCurrentPosition(
+        symbol,
+        MixHoldSideEnum.SHORT
+      );
     } else if (this.account instanceof SpotAccount) {
       initPosLong = await this.account.getCurrentPosition(
         symbol,
@@ -314,9 +326,12 @@ class Trader extends HandleTrader {
     tradeParam: TradeParam,
     price: number
   ) {
-  // Uniquement en DEV pour investisseurs fictifs
-  if (!this.config.botParameter.isDevEnv()) return;
-  if (!success || !this.investorAgent) return;
+    // Uniquement en PROD pour investisseurs (persistance réelle)
+    const isInvestorProd =
+      this.config.botParameter.isProdEnv() &&
+      this.account instanceof FutureInvestorAccount;
+    if (!isInvestorProd) return;
+    if (!success || !this.investorAgent) return;
     try {
       await persistOrder({
         investor: this.investorAgent,
@@ -333,7 +348,10 @@ class Trader extends HandleTrader {
         lastOrder: tradeParam.lastOrder,
       });
 
-      if (this.account instanceof FutureAccount) {
+      if (
+        this.account instanceof FutureAccount ||
+        this.account instanceof FutureInvestorAccount
+      ) {
         const posLong = await this.account.getCurrentPosition(
           tradeParam.symbol,
           MixHoldSideEnum.LONG
@@ -359,12 +377,12 @@ class Trader extends HandleTrader {
         );
       }
 
-      // Notification Telegram pour suivi des investisseurs fictifs
+      // Notification Telegram pour suivi des investisseurs (PROD)
       try {
         const action = type === "ENTRY" ? "ENTRY" : "EXIT";
         await this.config.telegramClient.sendMessage(
           this.config.telegramGroupOrderId,
-          `[DEV INVESTOR] ${action} ${tradeParam.symbol} side=${tradeParam.mixHoldSideEnum} price=${price}`
+          `[INVESTOR PROD] ${action} ${tradeParam.symbol} side=${tradeParam.mixHoldSideEnum} price=${price}`
         );
       } catch (e) {
         console.error("afterTradePersist telegram error", e);

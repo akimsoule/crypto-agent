@@ -1,16 +1,13 @@
 import { PrismaClient, InvestorProfile } from "@prisma/client";
 import { JSONObject, MixHoldSideEnum } from "./MapperType";
 
-// Garde: aucune persistance en mode production.
-// La persistance (orders/positions) est réservée au mode DEV pour les investisseurs fictifs.
-const IS_PROD = process.env.APP_ENV === 'production';
-
 // Singleton Prisma
 interface GlobalWithPrisma {
   __PRISMA_SINGLETON__?: PrismaClient;
 }
 const g = globalThis as GlobalWithPrisma;
-export const prisma: PrismaClient = g.__PRISMA_SINGLETON__ || new PrismaClient();
+export const prisma: PrismaClient =
+  g.__PRISMA_SINGLETON__ || new PrismaClient();
 g.__PRISMA_SINGLETON__ = prisma;
 
 export type OrderContext = {
@@ -24,17 +21,19 @@ export type OrderContext = {
 };
 
 export async function persistOrder(ctx: OrderContext) {
-  if (IS_PROD) {
-    // Pas de persistance en prod
-    return;
-  }
   const o = ctx.rawOrder || ctx.lastOrder || ({} as JSONObject);
-  const orderId = (o.orderId as string) || (o.id as string) || `${ctx.investor.id}-${Date.now()}`;
-  const clientOid = (o.clientOid as string) || (o.clientOrderId as string) || `c-${orderId}`;
+  const orderId =
+    (o.orderId as string) ||
+    (o.id as string) ||
+    `${ctx.investor.id}-${Date.now()}`;
+  const clientOid =
+    (o.clientOid as string) || (o.clientOrderId as string) || `c-${orderId}`;
   const size = String(o.size || o.executedSize || o.qty || o.baseSize || 0);
   const priceAvg = String(o.priceAvg || o.price || ctx.currentPrice || 0);
   const baseVolume = String(o.baseVolume || size);
-  const quoteVolume = String((o.quoteVolume as string) || (Number(priceAvg) * Number(size) || 0));
+  const quoteVolume = String(
+    (o.quoteVolume as string) || Number(priceAvg) * Number(size) || 0
+  );
   const side = (o.side as string) || ctx.side;
   const posSide = (o.posSide as string) || ctx.posSide.toLowerCase();
   try {
@@ -77,9 +76,6 @@ export async function persistPositions(
   positions: { [k in MixHoldSideEnum]?: JSONObject },
   meta: { marginMode?: string; leverage?: number; marginCoin?: string }
 ) {
-  if (IS_PROD) {
-    return; // Pas de persistance en prod
-  }
   for (const side of Object.keys(positions) as MixHoldSideEnum[]) {
     const p = positions[side];
     if (!p || Object.keys(p).length === 0) {
@@ -88,7 +84,9 @@ export async function persistPositions(
       });
       continue;
     }
-    const leverage = String((p.openLeverage as string) || p.leverage || meta.leverage || 0);
+    const leverage = String(
+      (p.openLeverage as string) || p.leverage || meta.leverage || 0
+    );
     const openPriceAvg = String(
       p.openPriceAvg || p.averageOpenPrice || p.openPrice || p.entryPrice || 0
     );

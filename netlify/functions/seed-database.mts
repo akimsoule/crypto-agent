@@ -1,5 +1,6 @@
 import { Context } from '@netlify/functions';
 import { PrismaClient } from '@prisma/client';
+import { main as runSeed } from '../../prisma/seed';
 import '../trade.app/src/package/common/Util'; // ensure any side-effects/env loading if needed
 
 // Minimal safe logger respecting concise output requirement
@@ -37,20 +38,26 @@ export default async function handler(request: Request, _context: Context) {
     if (reset) {
       log('Reset des données investors');
       // Supprime les entités dépendantes dans un ordre sûr
+      await prisma.investorSymbolExecution.deleteMany();
       await prisma.snapshot.deleteMany();
       await prisma.position.deleteMany();
       await prisma.order.deleteMany();
       await prisma.investorProfile.deleteMany();
     }
 
-    // On réutilise le script seed principal dynamiquement
-    const { default: runSeed } = await import('../prisma-seed-runner.mjs');
-    const result = await runSeed({ silent: true });
+    // Compte de base avant seed (après éventuel reset)
+    const before = await prisma.investorProfile.count();
+
+  // Appelle le seed principal (prisma/seed.ts)
+  await runSeed();
+
+    const after = await prisma.investorProfile.count();
+    const created = Math.max(0, after - before);
 
     return new Response(JSON.stringify({
       success: true,
       message: 'Seed exécuté',
-      details: { investorsCreated: result.investorsSeeded ?? 0, configsCreated: 0, timestamp: new Date().toISOString(), force, resetData: reset }
+      details: { investorsCreated: created, configsCreated: 0, timestamp: new Date().toISOString(), force, resetData: reset }
     }), { status: 200 });
   } catch (error) {
     console.error('[seed-db] erreur', error);

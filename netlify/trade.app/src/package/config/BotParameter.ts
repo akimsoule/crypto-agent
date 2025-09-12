@@ -20,6 +20,10 @@ class BotParameter {
     return this.params.profiles.includes(Profile.PROD);
   };
 
+  isInCloudEnv = () => {
+    return process.env.APP_ENV === "production" || process.env.APP_ENV === "prod";
+  }
+
   isDevEnv = () => {
     return this.params.profiles.includes(Profile.DEV);
   };

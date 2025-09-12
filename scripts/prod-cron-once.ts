@@ -5,6 +5,14 @@
  * - Charge runDev
  * - Log JSON structuré début/fin
  */
+// Set APP_ENV first
+process.env.APP_ENV = 'production';
+
+// Then load environment variables
+import { config } from 'dotenv';
+config({ path: '.env.prod' });
+
+// Finally import runDev
 import { runDev } from '../netlify/trade.app/src/main/Second/Prod/runDev.ts';
 
 function getSlotKey(date = new Date()): number {
@@ -12,12 +20,10 @@ function getSlotKey(date = new Date()): number {
 }
 
 async function main() {
-  // Default to development if not provided
-  if (!process.env.APP_ENV) process.env.APP_ENV = 'development';
   const start = Date.now();
   const slotKey = getSlotKey();
   const runId = `cron-${slotKey}`;
-  const payload = { scope: 'dev:cron:once', runId, slotKey, appEnv: process.env.APP_ENV };
+  const payload = { scope: 'prod:cron:once', runId, slotKey, appEnv: process.env.APP_ENV };
   console.log(JSON.stringify({ ...payload, event: 'start', ts: new Date().toISOString() }));
   try {
     await runDev();

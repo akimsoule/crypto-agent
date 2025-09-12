@@ -1,103 +1,50 @@
-import dotenv from "dotenv";
-import { PrismaClient } from "@prisma/client";
+import { InvestorProfile, PrismaClient } from "@prisma/client";
 import { SecondaryAccountConfig } from "../../../package/common/Config";
 import {
-  CandlestickIntervalEnum,
   FutureGroup,
   MixHoldSideEnum,
-  MixMarginModeEnum,
   Params,
   Profile,
   SpotGroup,
-  IndicatorType,
 } from "../../../package/common/MapperType";
 import { Runner } from "../../../package/common/Runner";
 import {
-  StandardFilter,
-  StandardFilterWithoutRoi,
-  StandardFilterWithoutNotFar,
-  QuickExitFilter,
-  DevFilter,
+  InvestorDevFilter,
+  InvestorProdFilter,
 } from "../../../package/filter/Filter";
-
-dotenv.config();
-
-// Helpers mapping
-const PERIOD_MAP: Record<string, CandlestickIntervalEnum> = {
-  "15M": CandlestickIntervalEnum.FIFTEEN_MINUTES,
-  "30M": CandlestickIntervalEnum.HALF_HOURLY,
-  "1H": CandlestickIntervalEnum.HOURLY,
-  "4H": CandlestickIntervalEnum.FOUR_HOURLY,
-};
-
-function mapPeriod(p?: string | null): CandlestickIntervalEnum {
-  if (!p) return CandlestickIntervalEnum.HOURLY;
-  return PERIOD_MAP[p.toUpperCase()] || CandlestickIntervalEnum.HOURLY;
-}
-
-function mapPosition(pos?: string | null): MixHoldSideEnum | null {
-  if (!pos) return MixHoldSideEnum.LONG; // défaut historique
-  const up = pos.toUpperCase();
-  if (up === "LONG") return MixHoldSideEnum.LONG;
-  if (up === "SHORT") return MixHoldSideEnum.SHORT;
-  return MixHoldSideEnum.LONG;
-}
-
-function mapMarginMode(m?: string | null): MixMarginModeEnum {
-  if (!m) return MixMarginModeEnum.CROSSED;
-  const up = m.toLowerCase();
-  if (up === "fixed" || up === "isolated") return MixMarginModeEnum.FIXED; // support alias
-  return MixMarginModeEnum.CROSSED;
-}
-
-function mapFilter(name?: string | null) {
-  switch (name) {
-    case "StandardFilterWithoutRoi":
-      return new StandardFilterWithoutRoi();
-    case "StandardFilterWithoutNotFar":
-      return new StandardFilterWithoutNotFar();
-    case "QuickExitFilter":
-      return new QuickExitFilter();
-    case "DevFilter":
-      return new DevFilter();
-    case "StandardFilter":
-    default:
-      return new StandardFilter();
-  }
-}
-
-function normalizeSymbols(symbols?: string[] | null): string[] {
-  if (!symbols || symbols.length === 0) return ["BTC", "ETH", "XRP"]; // fallback
-  return symbols.map((s) => s.replace(/USDT$/i, ""));
-}
-
-function mapIndicator(type?: string | null): IndicatorType {
-  // On fait confiance aux valeurs seedées; fallback safe
-  return (type as IndicatorType) || ("OR_MACD_ENV" as IndicatorType);
-}
+import {
+  mapPeriod,
+  mapPosition,
+  mapMarginMode,
+  normalizeSymbols,
+  mapIndicator,
+} from "../../../package/common/MapperLib";
 
 // Runner dev basé sur la configuration stockée en base
 export async function runDev(profs?: Profile[]): Promise<void> {
   const prisma = new PrismaClient();
+  const isProdEnv = profs?.includes(Profile.PROD);
 
   try {
-    const investors = await prisma.investorProfile.findMany({
+    const investors = (await prisma.investorProfile.findMany({
       where: { isActive: true },
-    });
+    })) as InvestorProfile[];
 
     if (investors.length === 0) {
       console.log("runDev: aucun investisseur actif trouvé");
       return;
     }
 
-  // Accumule les couples (investorId, symbol) exécutés pour batch upsert
-  const executed: { profileId: string; symbol: string }[] = [];
+    // Accumule les couples (investorId, symbol) exécutés pour batch upsert
+    const executed: { profileId: string; symbol: string }[] = [];
 
-  for (const inv of investors) {
+    for (const inv of investors) {
       const symbols = normalizeSymbols(inv.symbols as string[] | null);
       const period = mapPeriod(inv.period as string | null);
       const indicatorType = mapIndicator(inv.strategyName as string | null);
-      const filterInstance = mapFilter(inv.filter as string | null);
+      const filterInstance = isProdEnv
+        ? new InvestorProdFilter()
+        : new InvestorDevFilter();
       const position = mapPosition(inv.position as string | null);
       const leverage = (inv.leverage as number) || 5;
       const marginMode = mapMarginMode(inv.marginMode as string | null);
@@ -110,7 +57,7 @@ export async function runDev(profs?: Profile[]): Promise<void> {
           exit: exitValue,
           position: position ?? MixHoldSideEnum.LONG,
           activeLimit: false,
-            // utilisation du filtre mappé
+          // utilisation du filtre mappé
           filter: filterInstance,
           margeLeverage: leverage,
           marginMode,
@@ -118,10 +65,14 @@ export async function runDev(profs?: Profile[]): Promise<void> {
         } as FutureGroup,
       ];
 
+      const profiles: Profile[] = isProdEnv
+        ? [Profile.FUTURE, Profile.PROD]
+        : [Profile.FUTURE, Profile.DEV];
+
       const params: Params = {
         futureParam: { groups },
         spotParam: { groups: [] as SpotGroup[] },
-        profiles: [Profile.FUTURE, Profile.DEV, ...(profs || [])],
+        profiles,
       };
 
       try {
@@ -143,7 +94,10 @@ export async function runDev(profs?: Profile[]): Promise<void> {
         await new Runner(new SecondaryAccountConfig(params)).run(inv);
         // Enregistre les symboles visités
         for (const s of symbols) {
-          executed.push({ profileId: inv.id, symbol: s.toUpperCase() + 'USDT' });
+          executed.push({
+            profileId: inv.id,
+            symbol: s.toUpperCase() + "USDT",
+          });
         }
       } catch (e) {
         console.error(`runDev: erreur pour ${inv.name}`, e);
@@ -151,12 +105,12 @@ export async function runDev(profs?: Profile[]): Promise<void> {
     }
 
     // Batch upsert final (dernière date d'exécution)
-    if (executed.length) {
+    if (executed.length && isProdEnv) {
       const now = new Date();
       // Utilise un Set pour éviter doublons en cas de symboles répétés
       const uniq = new Map<string, { profileId: string; symbol: string }>();
       for (const e of executed) {
-        uniq.set(e.profileId + '::' + e.symbol, e);
+        uniq.set(e.profileId + "::" + e.symbol, e);
       }
       const rows = Array.from(uniq.values());
       // Prisma n'a pas de batchUpsert natif: on fait des upserts parallélisés raisonnablement
@@ -165,17 +119,29 @@ export async function runDev(profs?: Profile[]): Promise<void> {
       while (i < rows.length) {
         const slice = rows.slice(i, i + CONC);
         await Promise.all(
-          slice.map(r =>
+          slice.map((r) =>
             prisma.investorSymbolExecution.upsert({
-              where: { profileId_symbol: { profileId: r.profileId, symbol: r.symbol } },
+              where: {
+                profileId_symbol: { profileId: r.profileId, symbol: r.symbol },
+              },
               update: { lastExecutedAt: now },
-              create: { profileId: r.profileId, symbol: r.symbol, lastExecutedAt: now },
+              create: {
+                profileId: r.profileId,
+                symbol: r.symbol,
+                lastExecutedAt: now,
+              },
             })
           )
         );
         i += CONC;
       }
-      console.log(JSON.stringify({ scope: 'runDev', event: 'executionIndexPersisted', count: rows.length }));
+      console.log(
+        JSON.stringify({
+          scope: "runDev",
+          event: "executionIndexPersisted",
+          count: rows.length,
+        })
+      );
     }
   } finally {
     await prisma.$disconnect();
@@ -189,14 +155,35 @@ export default runDev;
 if (process.argv[1] && /runDev\.(ts|js)$/.test(process.argv[1])) {
   (async () => {
     const start = Date.now();
-    console.log(JSON.stringify({ scope: 'runDev', event: 'start', ts: new Date().toISOString() }));
+    console.log(
+      JSON.stringify({
+        scope: "runDev",
+        event: "start",
+        ts: new Date().toISOString(),
+      })
+    );
     try {
       await runDev();
       const dur = Date.now() - start;
-      console.log(JSON.stringify({ scope: 'runDev', event: 'end', status: 'OK', durationMs: dur }));
+      console.log(
+        JSON.stringify({
+          scope: "runDev",
+          event: "end",
+          status: "OK",
+          durationMs: dur,
+        })
+      );
     } catch (e) {
       const dur = Date.now() - start;
-      console.error(JSON.stringify({ scope: 'runDev', event: 'end', status: 'ERROR', error: (e as Error).message, durationMs: dur }));
+      console.error(
+        JSON.stringify({
+          scope: "runDev",
+          event: "end",
+          status: "ERROR",
+          error: (e as Error).message,
+          durationMs: dur,
+        })
+      );
       process.exit(1);
     }
   })();

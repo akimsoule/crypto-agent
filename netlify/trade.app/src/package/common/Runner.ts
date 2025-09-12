@@ -1,4 +1,3 @@
-
 import { Bean, BeanInvestor } from "../config/Bean";
 import { Config } from "./Config";
 import { Trader } from "./Trader";
@@ -12,16 +11,18 @@ export class Runner {
   }
 
   run = async (currentInvestor?: InvestorProfile) => {
-    // Utiliser BeanInvestor en mode DEV si un investisseur courant est fourni
-    const useInvestorBean =
-      !!currentInvestor && this.config.botParameter.isDevEnv();
-    const bean = useInvestorBean
-      ? new BeanInvestor(this.config, currentInvestor)
-      : new Bean(this.config);
+    let bean: Bean | BeanInvestor;
+    
+    if (currentInvestor) {
+      bean = new BeanInvestor(this.config, currentInvestor);
+    } else {
+      bean = new Bean(this.config);
+    }
+
     const startTime = performance.now();
 
-    let futureTrader : Trader | undefined;
-    let spotTrader : Trader | undefined;
+    let futureTrader: Trader | undefined;
+    let spotTrader: Trader | undefined;
     if (this.config.botParameter.isFutureEnv()) {
       futureTrader = bean.futureTrader as Trader;
       futureTrader.setInvestorAgent(currentInvestor);
@@ -40,5 +41,5 @@ export class Runner {
     const timeInSecond = (endTime - startTime) / 1000;
     const subject = timeInSecond.toFixed(2);
     console.log(`Execution time ${subject} seconds`);
-    };
+  };
 }

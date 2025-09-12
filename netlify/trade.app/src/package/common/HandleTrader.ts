@@ -3,7 +3,6 @@ import { TradeParam } from "./MapperType";
 import { Account } from "./Account";
 import { FilterSignal, FilterProd, FilterRoi, Filter } from "../filter/Filter";
 import { Util } from "./Util";
-import { FutureInvestorAccount } from "../future/investor/FutureInvestorAccount";
 
 class HandleTrader {
   public config: Config;
@@ -19,18 +18,8 @@ class HandleTrader {
       tradeParam.group.position === null ||
       tradeParam.group.position === tradeParam.mixHoldSideEnum.toString()
     ) {
-      // Sécurisation: certains comptes investisseurs peuvent ne pas avoir encore un objet filter initialisé.
-  const accountGroup = (this.account as unknown as { group?: { filter?: unknown } }).group;
-  const groupFilter = accountGroup?.filter as { filters?: { filters?: Filter[] } } | undefined;
-      if (!groupFilter || !groupFilter.filters) {
-        // Pas de structure de filtre -> on skip la stratégie pour éviter crash.
-        return;
-      }
-      const filterRoot = groupFilter.filters; // AndFilter / OrFilter
       const filters: Filter[] = [];
-      if (filterRoot?.filters) {
-        Util.findAllFilters(filterRoot.filters, filters);
-      }
+      Util.findAllFilters(this.account.group.filter.filters.filters, filters);
 
       const filterSignal = filters.find(
         (filter) => filter instanceof FilterSignal
@@ -60,71 +49,41 @@ class HandleTrader {
       }
 
       const { symbol, asset, index, mixHoldSideEnum } = tradeParam;
-      const isProd = this.config.botParameter.isProdEnv();
-      const isDev = this.config.botParameter.isDevEnv();
-      const isInvestorDev = isDev && this.account instanceof FutureInvestorAccount;
-      const isRealProd = isProd && !(this.account instanceof FutureInvestorAccount);
-      // On exécute l'entrée/sortie soit pour le trading réel en prod, soit pour les investisseurs fictifs en dev.
-      const canExecute = isInvestorDev || isRealProd;
-
-      if (!canExecute) return; // Pas de trading dans ce contexte
-
       if (this.account.group.filter.mustEnter(tradeParam)) {
-        const price = asset.closings[index];
-        const ok = await this.account.entry(
-          symbol,
-          price,
-          mixHoldSideEnum
-        );
-        // Persistance uniquement pour investisseurs fictifs en DEV
-        if (isInvestorDev) {
-          // @ts-expect-error dynamic method
-            if (this.afterTradePersist) {
-              // @ts-expect-error dynamic method
-              await this.afterTradePersist("ENTRY", ok, tradeParam, price);
-            }
+        if (this.config.botParameter.isProdEnv()) {
+          await this.account.entry(
+            symbol,
+            asset.closings[index],
+            mixHoldSideEnum
+          );
         }
       } else if (this.account.group.filter.mustExit(tradeParam)) {
-        const price = asset.closings[index];
-        await this.account.exitAllCopyIfPL(
-          symbol,
-          price,
-          mixHoldSideEnum
-        );
+        if (this.config.botParameter.isProdEnv()) {
+          await this.account.exitAllCopyIfPL(
+            symbol,
+            asset.closings[index],
+            mixHoldSideEnum
+          );
 
-        if (filterRoi) {
-          if (filterRoi.mustExit(tradeParam)) {
-            const ok1 = await this.account.exitAllCopy(
+          if (filterRoi) {
+            if (filterRoi.mustExit(tradeParam)) {
+              await this.account.exitAllCopy(
+                symbol,
+                asset.closings[index],
+                mixHoldSideEnum
+              );
+              await this.account.exitIfPL(
+                symbol,
+                asset.closings[index],
+                mixHoldSideEnum
+              );
+            }
+          } else {
+            await this.account.exit(
               symbol,
-              price,
+              asset.closings[index],
               mixHoldSideEnum
             );
-            const ok2 = await this.account.exitIfPL(
-              symbol,
-              price,
-              mixHoldSideEnum
-            );
-            if (isInvestorDev) {
-              // @ts-expect-error dynamic method
-              if (this.afterTradePersist) {
-                // @ts-expect-error dynamic method
-                await this.afterTradePersist(
-                  "EXIT",
-                  ok1 || ok2,
-                  tradeParam,
-                  price
-                );
-              }
-            }
-          }
-        } else {
-          const ok = await this.account.exit(symbol, price, mixHoldSideEnum);
-          if (isInvestorDev) {
-            // @ts-expect-error dynamic method
-            if (this.afterTradePersist) {
-              // @ts-expect-error dynamic method
-              await this.afterTradePersist("EXIT", ok, tradeParam, price);
-            }
           }
         }
       }
@@ -166,7 +125,5 @@ class HandleTrader {
     }
   };
 }
-
-// afterTradePersist: méthode potentiellement fournie par sous-classe (Trader)
 
 export { HandleTrader };
