@@ -1,11 +1,15 @@
 import { endpoint, json } from "./_lib/middleware.mts";
+import {
+  baseFromSymbol,
+  computeUnrealized,
+  getPriceMap,
+  reconstructStates,
+  buildPositionsDetail,
+  toNum,
+} from "./_lib/pnl.mts";
 
 // Helpers locaux (limiter l'impact sur le reste du code)
-function toNum(v: unknown, def = 0): number {
-  if (v === null || v === undefined) return def;
-  const n = typeof v === "number" ? v : parseFloat(String(v));
-  return Number.isFinite(n) ? n : def;
-}
+// toNum vient de pnl.mts
 
 function daysBetween(a: Date, b: Date): number {
   const ms = Math.abs(b.getTime() - a.getTime());
@@ -18,16 +22,26 @@ export default endpoint({
   handler: async ({ req, prisma }) => {
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
+  const sideParam = (url.searchParams.get("side") || "").toLowerCase();
+  const onlySide = sideParam === "long" || sideParam === "short" ? (sideParam as "long" | "short") : undefined;
     if (!id) return json({ success: false, error: "Param id requis" }, 400);
 
     // Récupération du profil + relations nécessaires
     const profile = await prisma.investorProfile.findUnique({
       where: { id },
       include: {
-        Position: true,
         Order: {
-          orderBy: { createdAt: "desc" },
-          take: 50, // limiter pour l'instant
+          orderBy: { createdAt: "asc" },
+          take: 500, // suffisant pour reconstruire l'état ouvert
+          select: {
+            orderId: true,
+            symbol: true,
+            createdAt: true,
+            baseVolume: true,
+            priceAvg: true,
+            side: true,
+            posSide: true,
+          },
         },
         snapshots: {
           orderBy: { createdAt: "desc" },
@@ -39,40 +53,14 @@ export default endpoint({
     if (!profile)
       return json({ success: false, error: "Investor introuvable" }, 404);
 
-    // Conversion des positions en structure "front"
-    const now = new Date();
-    const positions = profile.Position.map((pos) => {
-      const openPrice = toNum(pos.openPriceAvg);
-      const markPrice = toNum(pos.markPrice);
-      const unrealized = toNum(pos.unrealizedPL);
-      // Pourcent : (mark - open)/open * 100 (ajuster SHORT)
-      let pct = 0;
-      if (openPrice > 0) {
-        const raw = ((markPrice - openPrice) / openPrice) * 100;
-        pct = pos.holdSide?.toUpperCase() === "SHORT" ? -raw : raw;
-      }
-      const createdAt = pos.createdAt ?? now;
-      return {
-        id: pos.id, // NOTE: front a un type number, mais l'id Prisma est une string
-        snapshotId: 0, // pas de lien direct pour l'instant
-        coinId: pos.symbol,
-        symbol: pos.symbol,
-        name: pos.symbol,
-        quantity: toNum(pos.available) + toNum(pos.locked),
-        avgBuyPrice: openPrice,
-        currentPrice: markPrice,
-        unrealizedPnL: unrealized,
-        unrealizedPnLPercent: pct,
-        daysSinceEntry: daysBetween(createdAt, now),
-        lastUpdated: (pos.updatedAt ?? now).toISOString(),
-      };
-    });
-
-    // Agrégations de base
-    const totalUnrealized = positions.reduce(
-      (acc, p) => acc + p.unrealizedPnL,
-      0
+    // Reconstruire les positions ouvertes à partir des ORDERS (lissage) et calculer via mark price
+  const allBaseSymbols = Array.from(
+      new Set((profile?.Order ?? []).map((o) => baseFromSymbol(o.symbol)))
     );
+  const priceMap = await getPriceMap(allBaseSymbols, { ttlMs: 15_000 });
+  const states = reconstructStates((profile?.Order ?? []) as any, { onlySide });
+  const { totalUnrealized, activePositions } = computeUnrealized(states, priceMap, { onlySide });
+  const positionsDetail = buildPositionsDetail(states, priceMap, { onlySide });
     // Valeur approximative: balance initiale + PnL latent (en attendant un suivi de balance réel)
     const initialBalance = profile.initialBalance ?? 0;
     const totalValue = initialBalance + totalUnrealized;
@@ -89,8 +77,8 @@ export default endpoint({
       cashBalance: initialBalance, // placeholder (à raffiner si on suit le cash réellement)
       totalReturn,
       totalReturnPercent,
-      // Gain courant basé sur PnL latent si positions ouvertes
-      currentGain: positions.length > 0 ? totalUnrealized : 0,
+      // Gain courant basé sur PnL latent depuis ORDERS ouverts
+      currentGain: activePositions > 0 ? totalUnrealized : 0,
       winRate: 0, // nécessite historique de trades fermés
       avgWinPercent: 0,
       avgLossPercent: 0,
@@ -98,8 +86,8 @@ export default endpoint({
       totalTrades: profile.Order.length, // approximatif
       winningTrades: 0,
       losingTrades: 0,
-      activePositions: positions.length,
-      positions,
+  activePositions,
+  positions: [],
     };
 
     // Adaptation des snapshots historiques si des métriques sont présentes
@@ -127,13 +115,15 @@ export default endpoint({
     });
 
     // Investments : on dérive des Orders récentes (structure minimaliste)
-    const investments = profile.Order.slice(0, 20).map((o) => ({
-      id: o.orderId,
-      investorId: profile.id,
-      coinId: o.symbol,
-      symbol: o.symbol,
-      timestamp: o.createdAt.toISOString(),
-    }));
+    const investments = profile.Order.slice(-20)
+      .reverse()
+      .map((o) => ({
+        id: o.orderId,
+        investorId: profile.id,
+        coinId: o.symbol,
+        symbol: o.symbol,
+        timestamp: o.createdAt.toISOString(),
+      }));
 
     // Dernières exécutions (investor-symbol)
     const execRows = await prisma.investorSymbolExecution.findMany({
@@ -148,10 +138,7 @@ export default endpoint({
     }
 
     // Enrichir positions / investments avec lastExecutedAt si disponible
-    const positionsWithExec = positions.map((p) => ({
-      ...p,
-      lastExecutedAt: execMap.get(p.symbol) || null,
-    }));
+  const positionsWithExec: any[] = [];
     const investmentsWithExec = investments.map((i) => ({
       ...i,
       lastExecutedAt: execMap.get(i.symbol) || null,
@@ -178,7 +165,8 @@ export default endpoint({
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
       investments: investmentsWithExec,
-      portfolioSnapshots: [currentSnapshot, ...historical],
+  portfolioSnapshots: [currentSnapshot, ...historical],
+  openPositions: positionsDetail,
       lastExecutions: executions,
       lastExecutedAt: latestExec,
     };

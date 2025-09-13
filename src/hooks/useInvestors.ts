@@ -68,6 +68,15 @@ export interface Investor {
   portfolioSnapshots: CryptoPortfolioSnapshot[];
   lastExecutions?: { symbol: string; lastExecutedAt: string }[];
   lastExecutedAt?: string | null;
+  openPositions?: Array<{
+    base: string;
+    symbol: string;
+    side: 'long' | 'short';
+    qty: number;
+    avg: number;
+    price: number;
+    unrealized: number;
+  }>;
 }
 
 export function useInvestors() {
@@ -95,9 +104,11 @@ export function useInvestors() {
     fetchInvestors();
   }, []);
 
-  const getInvestorDetail = async (id: string): Promise<{ success: boolean; data?: Investor; error?: string }> => {
+  const getInvestorDetail = async (id: string, options?: { side?: 'long' | 'short' }): Promise<{ success: boolean; data?: Investor; error?: string }> => {
     try {
-      const response = await fetch(`/api/investorDetail?id=${id}`);
+      const params = new URLSearchParams({ id });
+      if (options?.side) params.set('side', options.side);
+      const response = await fetch(`/api/investorDetail?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Erreur lors du chargement des détails');
       }
