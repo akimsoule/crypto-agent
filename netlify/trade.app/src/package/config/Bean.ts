@@ -1,4 +1,4 @@
-import { Config } from "../common/Config";
+import { Config, SecondaryAccountConfig } from "../common/Config";
 import { InvestorProfile } from "@prisma/client";
 import { Trader } from "../common/Trader";
 import { FutureAccount } from "../future/FutureAccount";
@@ -27,7 +27,7 @@ class BeanInvestor {
 	futureTrader: Trader;
 	spotTrader: Trader;
 
-	constructor(config: Config, investor: InvestorProfile) {
+	constructor(config: SecondaryAccountConfig, investor: InvestorProfile) {
 		// Future side: DB-backed investor account + Coinpaprika candles
 		const futureCandle = new FutureInvestorCandle(config);
 		const futureAccount = new FutureInvestorAccount(investor.id, futureCandle);

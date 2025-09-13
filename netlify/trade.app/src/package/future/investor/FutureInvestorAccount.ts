@@ -112,6 +112,27 @@ export class FutureInvestorAccount
           currentPrice,
           rawOrder,
         });
+
+        //envoyer de message telegram
+        try {
+          const telegram = this.candle.config.telegramClient;
+          const chatId = this.candle.config.telegramGroupOrderId;
+          if (telegram && chatId) {
+            const when = new Date().toISOString();
+            const sideEmoji =
+              mixHoldSideEnum === MixHoldSideEnum.LONG ? "🟢 LONG" : "🔴 SHORT";
+            const msg = [
+              `🔔 Nouvel ordre (Entry) — ${investor.name || this.investorId}`,
+              `• 📊 ${symbol} — ${sideEmoji}`,
+              `• 📦 Qty: ${qty.toFixed(6)}`,
+              `• 💵 Price: ${currentPrice.toFixed(6)}`,
+              `• ⏱️ ${when}`,
+            ].join("\n");
+            await telegram.sendMessage(chatId, msg);
+          }
+        } catch (e) {
+          console.warn("telegram send failed", e);
+        }
       } else {
         console.error(
           `entry: investor profile not found for id=${this.investorId}`
@@ -184,6 +205,43 @@ export class FutureInvestorAccount
             marginCoin: (this.group as any)?.marginCoin || "USDT",
           };
           await persistPositions(investor, symbol, positions, meta);
+
+          //envoyer de message telegram
+          try {
+            const telegram = this.candle.config.telegramClient;
+            const chatId = this.candle.config.telegramGroupOrderId;
+            if (telegram && chatId) {
+              const avg =
+                (pos[Label.AVERAGE_OPEN_PRICE] as number) ||
+                (pos[Label.OPEN_PRICE_AVG] as number) ||
+                0;
+              const pnl =
+                mixHoldSideEnum === MixHoldSideEnum.LONG
+                  ? (currentPrice - avg) * qty
+                  : (avg - currentPrice) * qty;
+              const denom = Math.max(0, avg * qty);
+              const pnlPct = denom > 0 ? (pnl / denom) * 100 : 0;
+              const sign = pnl >= 0 ? "+" : "";
+              const when = new Date().toISOString();
+              const trendEmoji = pnl >= 0 ? "📈" : "📉";
+              const sideEmoji =
+                mixHoldSideEnum === MixHoldSideEnum.LONG
+                  ? "🟢 LONG"
+                  : "🔴 SHORT";
+              const msg = [
+                `🏁 Fermeture (Exit) — ${investor.name || this.investorId}`,
+                `• 📊 ${symbol} — ${sideEmoji}`,
+                `• 📦 Qty: ${qty.toFixed(6)}`,
+                `• 🎯 Avg: ${avg.toFixed(6)}`,
+                `• 💵 Price: ${currentPrice.toFixed(6)}`,
+                `• ${trendEmoji} PnL: ${sign}${pnl.toFixed(2)} USDT (${sign}${pnlPct.toFixed(2)}%)`,
+                `• ⏱️ ${when}`,
+              ].join("\n");
+              await telegram.sendMessage(chatId, msg);
+            }
+          } catch (e) {
+            console.warn("telegram send failed", e);
+          }
         } catch (err) {
           console.error("persistPositions (exit) error", err);
         }
@@ -272,8 +330,14 @@ export class FutureInvestorAccount
       // Récupérer le prix courant via FutureInvestorCandle (utilise son cache)
       let currentPrice = 0;
       try {
-        const period = (this.group as any)?.period || CandlestickIntervalEnum.HOURLY;
-        const candles = await this.candle.getCandles(symbol, period, new Date(), 1);
+        const period =
+          (this.group as any)?.period || CandlestickIntervalEnum.HOURLY;
+        const candles = await this.candle.getCandles(
+          symbol,
+          period,
+          new Date(),
+          1
+        );
         if (candles && candles.length) {
           const last = candles[candles.length - 1];
           currentPrice = Number(last.close || 0);
@@ -283,7 +347,11 @@ export class FutureInvestorAccount
       } catch (err) {
         // En cas d'erreur d'accès au provider/candle, on retourne 0 (comportement antérieur
         // était de retomber sur la table cryptoGemProject). Ici on évite l'accès direct à Prisma.
-        console.warn('getCurrentPosition: unable to fetch candles for', symbol, err);
+        console.warn(
+          "getCurrentPosition: unable to fetch candles for",
+          symbol,
+          err
+        );
         currentPrice = 0;
       }
       const leverage = (this.group as any)?.margeLeverage || 1;

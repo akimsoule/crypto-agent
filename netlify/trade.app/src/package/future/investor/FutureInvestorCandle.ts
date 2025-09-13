@@ -1,7 +1,7 @@
 import { Candle } from "../../common/Candle";
 import { Candlestick, CandlestickIntervalEnum } from "../../common/MapperType";
 import { Util } from "../../common/Util";
-import { Config } from "../../common/Config";
+import { SecondaryAccountConfig } from "../../common/Config";
 import { Asset } from "../../../types/lib";
 import {
   FuturesCandlesRequestV2,
@@ -16,7 +16,7 @@ import { MarketDataProvider } from "../marketdata/Provider";
 
 // Implémentation: cache partagé -> coinpaprika -> bitget -> throw (pas de synthétique autorisé).
 class FutureInvestorCandle implements Candle {
-  config: Config;
+  config: SecondaryAccountConfig;
 
   private static CACHE: Map<
     string,
@@ -30,7 +30,7 @@ class FutureInvestorCandle implements Candle {
     return Math.max(30_000, Util.getDuration(period) / 2);
   }
 
-  constructor(config: Config) {
+  constructor(config: SecondaryAccountConfig) {
     this.config = config;
   }
 

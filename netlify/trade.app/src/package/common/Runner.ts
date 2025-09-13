@@ -1,5 +1,5 @@
 import { Bean, BeanInvestor } from "../config/Bean";
-import { Config } from "./Config";
+import { Config, SecondaryAccountConfig } from "./Config";
 import { Trader } from "./Trader";
 import { InvestorProfile } from "@prisma/client";
 
@@ -12,9 +12,9 @@ export class Runner {
 
   run = async (currentInvestor?: InvestorProfile) => {
     let bean: Bean | BeanInvestor;
-    
+
     if (currentInvestor) {
-      bean = new BeanInvestor(this.config, currentInvestor);
+      bean = new BeanInvestor(this.config as SecondaryAccountConfig, currentInvestor);
     } else {
       bean = new Bean(this.config);
     }
