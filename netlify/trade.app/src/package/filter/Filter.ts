@@ -52,6 +52,13 @@ class FilterRoi extends BaseFilter {
   public upThreshold = 5;
   public takeProfitThreshold = 10;
 
+  constructor(lowThreshold = -25, upThreshold = 5, takeProfitThreshold = 10) {
+    super();
+    this.lowThreshold = lowThreshold;
+    this.upThreshold = upThreshold;
+    this.takeProfitThreshold = takeProfitThreshold;
+  }
+
   mustEnter(tradeParam: TradeParam): boolean {
     if (tradeParam.group.exit) {
       return this.isLoosing(tradeParam.position, tradeParam.currentPrice);
@@ -432,6 +439,28 @@ class InvestorProdFilter extends BaseFilter {
     return this.filters.mustExit(tradeParam);
   }
 }
+
+['A', 'B', 'C'].map(() => {
+  // create a filter
+  new (class extends BaseFilter {
+    public filters: AndFilter;
+
+    constructor() {
+      super();
+      this.filters = new AndFilter([new FilterSignal(), new FilterRoi()]);
+    }
+
+    mustEnter(tradeParam: TradeParam): boolean {
+      return this.filters.mustEnter(tradeParam);
+    }
+
+    mustExit(tradeParam: TradeParam): boolean {
+      return this.filters.mustExit(tradeParam);
+    }
+
+  })();
+});
+
 
 export {
   Filter,

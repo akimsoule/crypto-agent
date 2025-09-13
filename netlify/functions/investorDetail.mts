@@ -89,6 +89,8 @@ export default endpoint({
       cashBalance: initialBalance, // placeholder (à raffiner si on suit le cash réellement)
       totalReturn,
       totalReturnPercent,
+      // Gain courant basé sur PnL latent si positions ouvertes
+      currentGain: positions.length > 0 ? totalUnrealized : 0,
       winRate: 0, // nécessite historique de trades fermés
       avgWinPercent: 0,
       avgLossPercent: 0,
@@ -111,6 +113,7 @@ export default endpoint({
         cashBalance: toNum(metrics.cashBalance),
         totalReturn: toNum(metrics.totalReturn),
         totalReturnPercent: toNum(metrics.totalReturnPercent),
+        currentGain: toNum(metrics.currentGain),
         winRate: toNum(metrics.winRate),
         avgWinPercent: toNum(metrics.avgWinPercent),
         avgLossPercent: toNum(metrics.avgLossPercent),

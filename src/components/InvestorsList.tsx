@@ -127,6 +127,7 @@ export default function InvestorsList() {
           const totalReturn = latestSnapshot?.totalReturnPercent || 0
           const winRate = latestSnapshot?.winRate || 0
           const activePositions = latestSnapshot?.activePositions || 0
+          const currentGain = latestSnapshot?.currentGain ?? 0
           const lastTrade = getLastTradeInfo(investor.investments)
           const avatar = getInvestorAvatar(investor.type)
           const globalIndex = (currentPage - 1) * pageSize + index
@@ -164,6 +165,11 @@ export default function InvestorsList() {
                     }`}>
                       {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(1)}%
                     </div>
+                    {Number.isFinite(currentGain) && (
+                      <div className={`stat-desc text-xs ${currentGain >= 0 ? 'text-success' : 'text-error'}`}>
+                        {currentGain >= 0 ? '+' : ''}${currentGain.toLocaleString()}
+                      </div>
+                    )}
                   </div>
 
                   <div className="stat p-0">
@@ -305,6 +311,13 @@ export default function InvestorsList() {
                       <div className="text-sm sm:text-xl font-semibold text-secondary break-all max-w-[130px] sm:max-w-none">
                         ${selectedInvestor.portfolioSnapshots[0].totalValue.toLocaleString()}
                       </div>
+                      {Number.isFinite(selectedInvestor.portfolioSnapshots[0].currentGain ?? NaN) && (
+                        <div className={`text-[10px] sm:text-xs mt-1 ${
+                          (selectedInvestor.portfolioSnapshots[0].currentGain ?? 0) >= 0 ? 'text-success' : 'text-error'
+                        }`}>
+                          Gain courant: {(selectedInvestor.portfolioSnapshots[0].currentGain ?? 0) >= 0 ? '+' : ''}${(selectedInvestor.portfolioSnapshots[0].currentGain ?? 0).toLocaleString()}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}

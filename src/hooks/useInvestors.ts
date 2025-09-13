@@ -35,6 +35,7 @@ export interface CryptoPortfolioSnapshot {
   cashBalance: number;
   totalReturn: number;
   totalReturnPercent: number;
+  currentGain?: number; // PnL latent courant si positions ouvertes
   winRate: number;
   avgWinPercent: number;
   avgLossPercent: number;
