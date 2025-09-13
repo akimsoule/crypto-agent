@@ -1,7 +1,10 @@
 // Utilitaires partagés pour reconstruction des positions ouvertes et calcul de PnL
 import { SecondaryAccountConfig } from "../../trade.app/src/package/common/Config";
 import { FutureInvestorCandle } from "../../trade.app/src/package/future/investor/FutureInvestorCandle";
-import { CandlestickIntervalEnum, MixHoldSideEnum } from "../../trade.app/src/package/common/MapperType";
+import {
+  CandlestickIntervalEnum,
+  MixHoldSideEnum,
+} from "../../trade.app/src/package/common/MapperType";
 
 export type OrderLite = {
   symbol: string;
@@ -12,7 +15,12 @@ export type OrderLite = {
   createdAt: Date;
 };
 
-export type State = { qty: number; avg: number; base: string; side: "long" | "short" };
+export type State = {
+  qty: number;
+  avg: number;
+  base: string;
+  side: "long" | "short";
+};
 
 export type PositionDetail = {
   base: string;
@@ -24,7 +32,8 @@ export type PositionDetail = {
   unrealized: number;
 };
 
-export const baseFromSymbol = (sym: string) => sym.replace(/S?USDT$/i, "").toUpperCase();
+export const baseFromSymbol = (sym: string) =>
+  sym.replace(/S?USDT$/i, "").toUpperCase();
 
 export function toNum(v: unknown, def = 0): number {
   if (v === null || v === undefined) return def;
@@ -37,7 +46,9 @@ export function reconstructStates(
   opts?: { onlySide?: "long" | "short" | MixHoldSideEnum }
 ): Map<string, State> {
   const states = new Map<string, State>(); // key = base:side
-  const asc = orders.slice().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const asc = orders
+    .slice()
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   for (const o of asc) {
     const base = baseFromSymbol(o.symbol);
     const pos = String(o.posSide || "").toLowerCase() as "long" | "short";
@@ -111,11 +122,12 @@ export async function getPriceMap(
     }
   }
 
-  // 1) Mark price via FutureInvestorCandle (dernière close récente)
   await Promise.all(
     toFetch.map(async (b) => {
+      // IMPORTANT: passer uniquement la base (ex: "ETH");
+      // les providers appendront eux-mêmes le quote si nécessaire (ex: Binance -> ETHUSDT)
+      const symbol = b;
       try {
-        const symbol = `${b}USDT`;
         const candles = await candle.getCandles(
           symbol,
           CandlestickIntervalEnum.HOURLY,
@@ -131,7 +143,7 @@ export async function getPriceMap(
           }
         }
       } catch {
-        // ignore, pas de fallback DB
+        // ignore si indisponible (pas de fallback)
       }
     })
   );
@@ -159,7 +171,8 @@ export function computeUnrealized(
     }
     if (st.qty <= 0 || st.avg <= 0) continue;
     const px = priceMap.get(st.base) ?? st.avg;
-    const pnl = st.side === "long" ? (px - st.avg) * st.qty : (st.avg - px) * st.qty;
+    const pnl =
+      st.side === "long" ? (px - st.avg) * st.qty : (st.avg - px) * st.qty;
     totalUnrealized += pnl;
     activePositions += 1;
   }
@@ -182,7 +195,10 @@ export function buildPositionsDetail(
     }
     if (st.qty <= 0 || st.avg <= 0) continue;
     const price = priceMap.get(st.base) ?? st.avg;
-    const unrealized = st.side === "long" ? (price - st.avg) * st.qty : (st.avg - price) * st.qty;
+    const unrealized =
+      st.side === "long"
+        ? (price - st.avg) * st.qty
+        : (st.avg - price) * st.qty;
     details.push({
       base: st.base,
       symbol: `${st.base}USDT`,
@@ -194,6 +210,10 @@ export function buildPositionsDetail(
     });
   }
   // Trier par PnL décroissant pour lisibilité
-  details.sort((a, b) => Math.sign(Math.abs(b.unrealized) - Math.abs(a.unrealized)) || Math.sign(b.unrealized - a.unrealized));
+  details.sort(
+    (a, b) =>
+      Math.sign(Math.abs(b.unrealized) - Math.abs(a.unrealized)) ||
+      Math.sign(b.unrealized - a.unrealized)
+  );
   return details;
 }

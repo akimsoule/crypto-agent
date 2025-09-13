@@ -22,8 +22,14 @@ export default endpoint({
   handler: async ({ req, prisma }) => {
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
-  const sideParam = (url.searchParams.get("side") || "").toLowerCase();
-  const onlySide = sideParam === "long" || sideParam === "short" ? (sideParam as "long" | "short") : undefined;
+    const sideParam = (url.searchParams.get("side") || "").toLowerCase();
+    const debug =
+      url.searchParams.get("debug") === "1" ||
+      url.searchParams.get("debug") === "true";
+    const onlySide =
+      sideParam === "long" || sideParam === "short"
+        ? (sideParam as "long" | "short")
+        : undefined;
     if (!id) return json({ success: false, error: "Param id requis" }, 400);
 
     // Récupération du profil + relations nécessaires
@@ -54,13 +60,21 @@ export default endpoint({
       return json({ success: false, error: "Investor introuvable" }, 404);
 
     // Reconstruire les positions ouvertes à partir des ORDERS (lissage) et calculer via mark price
-  const allBaseSymbols = Array.from(
+    const allBaseSymbols = Array.from(
       new Set((profile?.Order ?? []).map((o) => baseFromSymbol(o.symbol)))
     );
-  const priceMap = await getPriceMap(allBaseSymbols, { ttlMs: 15_000 });
-  const states = reconstructStates((profile?.Order ?? []) as any, { onlySide });
-  const { totalUnrealized, activePositions } = computeUnrealized(states, priceMap, { onlySide });
-  const positionsDetail = buildPositionsDetail(states, priceMap, { onlySide });
+    const priceMap = await getPriceMap(allBaseSymbols, { ttlMs: 15_000 });
+    const states = reconstructStates((profile?.Order ?? []) as any, {
+      onlySide,
+    });
+    const { totalUnrealized, activePositions } = computeUnrealized(
+      states,
+      priceMap,
+      { onlySide }
+    );
+    const positionsDetail = buildPositionsDetail(states, priceMap, {
+      onlySide,
+    });
     // Valeur approximative: balance initiale + PnL latent (en attendant un suivi de balance réel)
     const initialBalance = profile.initialBalance ?? 0;
     const totalValue = initialBalance + totalUnrealized;
@@ -86,8 +100,8 @@ export default endpoint({
       totalTrades: profile.Order.length, // approximatif
       winningTrades: 0,
       losingTrades: 0,
-  activePositions,
-  positions: [],
+      activePositions,
+      positions: [],
     };
 
     // Adaptation des snapshots historiques si des métriques sont présentes
@@ -138,7 +152,7 @@ export default endpoint({
     }
 
     // Enrichir positions / investments avec lastExecutedAt si disponible
-  const positionsWithExec: any[] = [];
+    const positionsWithExec: any[] = [];
     const investmentsWithExec = investments.map((i) => ({
       ...i,
       lastExecutedAt: execMap.get(i.symbol) || null,
@@ -165,8 +179,16 @@ export default endpoint({
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
       investments: investmentsWithExec,
-  portfolioSnapshots: [currentSnapshot, ...historical],
-  openPositions: positionsDetail,
+      portfolioSnapshots: [currentSnapshot, ...historical],
+      openPositions: positionsDetail,
+      ...(debug
+        ? {
+            priceDebug: allBaseSymbols.map((b) => ({
+              base: b,
+              price: priceMap.get(b) ?? null,
+            })),
+          }
+        : {}),
       lastExecutions: executions,
       lastExecutedAt: latestExec,
     };
