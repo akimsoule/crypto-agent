@@ -67,7 +67,11 @@ class Trader extends HandleTrader {
       this.config instanceof SecondaryAccountConfig
         ? "Secondary config"
         : "Main config";
-    let message = `[From:${process.platform} - ${configName}][At:${hour
+    const accountName =
+      this.account instanceof FutureInvestorAccount
+        ? "FutureInvestorAccount"
+        : "Null";
+    let message = `[From:${process.platform} - ${configName} - ${accountName}][At:${hour
       .toString()
       .padStart(2, "0")}:${minute.toString().padStart(2, "0")}]`;
 
