@@ -115,21 +115,20 @@ export class FutureInvestorAccount
 
         //envoyer de message telegram
         try {
-          const telegram = this.candle.config.telegramClient;
-          const chatId = this.candle.config.telegramGroupOrderId;
-          if (telegram && chatId) {
-            const when = new Date().toISOString();
-            const sideEmoji =
-              mixHoldSideEnum === MixHoldSideEnum.LONG ? "🟢 LONG" : "🔴 SHORT";
-            const msg = [
-              `🔔 Nouvel ordre (Entry) — ${investor.name || this.investorId}`,
-              `• 📊 ${symbol} — ${sideEmoji}`,
-              `• 📦 Qty: ${qty.toFixed(6)}`,
-              `• 💵 Price: ${currentPrice.toFixed(6)}`,
-              `• ⏱️ ${when}`,
-            ].join("\n");
-            await telegram.sendMessage(chatId, msg);
-          }
+          const when = new Date().toISOString();
+          const sideEmoji =
+            mixHoldSideEnum === MixHoldSideEnum.LONG ? "🟢 LONG" : "🔴 SHORT";
+          const msg = [
+            `🔔 Nouvel ordre (Entry) — ${investor.name || this.investorId}`,
+            `• 📊 ${symbol} — ${sideEmoji}`,
+            `• 📦 Qty: ${qty.toFixed(6)}`,
+            `• 💵 Price: ${currentPrice.toFixed(6)}`,
+            `• ⏱️ ${when}`,
+          ].join("\n");
+          await this.candle.config.telegramClient.sendMessage(
+            this.candle.config.telegramGroupOrderId,
+            msg
+          );
         } catch (e) {
           console.warn("telegram send failed", e);
         }
@@ -208,37 +207,34 @@ export class FutureInvestorAccount
 
           //envoyer de message telegram
           try {
-            const telegram = this.candle.config.telegramClient;
-            const chatId = this.candle.config.telegramGroupOrderId;
-            if (telegram && chatId) {
-              const avg =
-                (pos[Label.AVERAGE_OPEN_PRICE] as number) ||
-                (pos[Label.OPEN_PRICE_AVG] as number) ||
-                0;
-              const pnl =
-                mixHoldSideEnum === MixHoldSideEnum.LONG
-                  ? (currentPrice - avg) * qty
-                  : (avg - currentPrice) * qty;
-              const denom = Math.max(0, avg * qty);
-              const pnlPct = denom > 0 ? (pnl / denom) * 100 : 0;
-              const sign = pnl >= 0 ? "+" : "";
-              const when = new Date().toISOString();
-              const trendEmoji = pnl >= 0 ? "📈" : "📉";
-              const sideEmoji =
-                mixHoldSideEnum === MixHoldSideEnum.LONG
-                  ? "🟢 LONG"
-                  : "🔴 SHORT";
-              const msg = [
-                `🏁 Fermeture (Exit) — ${investor.name || this.investorId}`,
-                `• 📊 ${symbol} — ${sideEmoji}`,
-                `• 📦 Qty: ${qty.toFixed(6)}`,
-                `• 🎯 Avg: ${avg.toFixed(6)}`,
-                `• 💵 Price: ${currentPrice.toFixed(6)}`,
-                `• ${trendEmoji} PnL: ${sign}${pnl.toFixed(2)} USDT (${sign}${pnlPct.toFixed(2)}%)`,
-                `• ⏱️ ${when}`,
-              ].join("\n");
-              await telegram.sendMessage(chatId, msg);
-            }
+            const avg =
+              (pos[Label.AVERAGE_OPEN_PRICE] as number) ||
+              (pos[Label.OPEN_PRICE_AVG] as number) ||
+              0;
+            const pnl =
+              mixHoldSideEnum === MixHoldSideEnum.LONG
+                ? (currentPrice - avg) * qty
+                : (avg - currentPrice) * qty;
+            const denom = Math.max(0, avg * qty);
+            const pnlPct = denom > 0 ? (pnl / denom) * 100 : 0;
+            const sign = pnl >= 0 ? "+" : "";
+            const when = new Date().toISOString();
+            const trendEmoji = pnl >= 0 ? "📈" : "📉";
+            const sideEmoji =
+              mixHoldSideEnum === MixHoldSideEnum.LONG ? "🟢 LONG" : "🔴 SHORT";
+            const msg = [
+              `🏁 Fermeture (Exit) — ${investor.name || this.investorId}`,
+              `• 📊 ${symbol} — ${sideEmoji}`,
+              `• 📦 Qty: ${qty.toFixed(6)}`,
+              `• 🎯 Avg: ${avg.toFixed(6)}`,
+              `• 💵 Price: ${currentPrice.toFixed(6)}`,
+              `• ${trendEmoji} PnL: ${sign}${pnl.toFixed(2)} USDT (${sign}${pnlPct.toFixed(2)}%)`,
+              `• ⏱️ ${when}`,
+            ].join("\n");
+            await this.candle.config.telegramClient.sendMessage(
+              this.candle.config.telegramGroupOrderId,
+              msg
+            );
           } catch (e) {
             console.warn("telegram send failed", e);
           }

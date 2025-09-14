@@ -10,25 +10,28 @@ import {
   Profile,
 } from "./MapperType";
 
-// Wrapper léger pour éviter problèmes d'héritage/ESM et rendre l'appel no-op hors prod
-interface TelegramLike {
-  sendMessage(chatId: string | number, text: string): Promise<unknown>;
-}
+class CustomTelegramBot extends TelegramBot {
+  private botParameter: BotParameter;
 
-class SafeTelegram {
-  private inner: TelegramLike | null;
-  private enabled: boolean;
-  constructor(token: string | undefined, enabled: boolean) {
-    this.enabled = Boolean(token && enabled);
-  // On cast en unknown puis TelegramLike pour isoler l'usage minimal
-  this.inner = this.enabled && token ? (new (TelegramBot as unknown as { new(token: string, opts?: unknown): TelegramLike })(token, { polling: false }) as unknown as TelegramLike) : null;
+  constructor(
+    token: string,
+    botParameter: BotParameter,
+    options?: TelegramBot.ConstructorOptions
+  ) {
+    super(token, options);
+    this.botParameter = botParameter;
   }
-  async sendMessage(chatId: string | number, text: string): Promise<void> {
-    if (!this.inner) return;
-    try {
-      await this.inner.sendMessage(chatId, text);
-    } catch {
-      // silencieux
+
+  sendMessage(
+    chatId: TelegramBot.ChatId,
+    text: string,
+    options?: TelegramBot.SendMessageOptions
+  ): Promise<TelegramBot.Message> {
+    if (this.botParameter.isProdEnv()) {
+      return super.sendMessage(chatId, text, options);
+    } else {
+      const message = {} as TelegramBot.Message;
+      return Promise.resolve(message);
     }
   }
 }
@@ -37,7 +40,7 @@ class Config {
   public bitgetClientV2: RestClientV2;
   public cachedBitgetClient: CachedBitgetClient;
   public botParameter: BotParameter;
-  public telegramClient: SafeTelegram;
+  public telegramClient: TelegramBot;
   public telegramGroupOrderId: string;
 
   public static MAIN_DEFAULT_CONFIG = (
@@ -65,27 +68,24 @@ class Config {
 
   //default constructor(params: Params) with main account
   constructor(params: Params) {
-    // Initialiser d'abord les paramètres du bot
-    this.botParameter = new BotParameter(params);
-
-    // N'utiliser l'authentification que si les 3 champs sont définis
-    const mainApiKey = process.env.ACCOUNT_API_KEY_MAIN;
-    const mainApiSecret = process.env.ACCOUNT_SECRET_KEY_MAIN;
-    const apiPass = process.env.API_PASS;
-
-    const hasAllMainCreds = Boolean(mainApiKey && mainApiSecret && apiPass);
-
-    this.bitgetClientV2 = hasAllMainCreds
-      ? new RestClientV2({ apiKey: mainApiKey, apiSecret: mainApiSecret, apiPass })
-      : new RestClientV2();
+    this.bitgetClientV2 = new RestClientV2({
+      apiKey: process.env.ACCOUNT_API_KEY_MAIN,
+      apiSecret: process.env.ACCOUNT_SECRET_KEY_MAIN,
+      apiPass: process.env.API_PASS,
+    });
 
     // Créer une instance du client avec cache
     this.cachedBitgetClient = new CachedBitgetClient(this.bitgetClientV2);
 
-    const telegramKey = process.env.TELEGRAM_KEY;
-    const telegramGroup = process.env.TELEGRAM_GROUP_ID || "0";
-    this.telegramClient = new SafeTelegram(telegramKey, this.botParameter.isProdEnv());
-    this.telegramGroupOrderId = telegramGroup;
+    this.botParameter = new BotParameter(params);
+    this.telegramClient = new CustomTelegramBot(
+      process.env.TELEGRAM_KEY as string,
+      this.botParameter,
+      {
+        polling: false,
+      }
+    );
+    this.telegramGroupOrderId = process.env.TELEGRAM_GROUP_ID as string;
   }
 }
 
