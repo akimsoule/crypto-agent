@@ -67,10 +67,16 @@ class Trader extends HandleTrader {
       this.config instanceof SecondaryAccountConfig
         ? "Secondary config"
         : "Main config";
-    const accountName =
-      this.account instanceof FutureInvestorAccount
-        ? "FutureInvestorAccount"
-        : "Null";
+    let accountName = "";
+    if (this.account instanceof FutureAccount) {
+      accountName = "FutureAccount";
+    } else if (this.account instanceof SpotAccount) {
+      accountName = "SpotAccount";
+    } else if (this.account instanceof FutureInvestorAccount) {
+      accountName = "FutureInvestorAccount";
+    } else {
+      accountName = "Null";
+    }
     let message = `[From:${process.platform} - ${configName} - ${accountName}][At:${hour
       .toString()
       .padStart(2, "0")}:${minute.toString().padStart(2, "0")}]`;
