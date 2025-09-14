@@ -1,263 +1,89 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   CandlestickIntervalEnum,
   IndicatorType,
-  InvestorType,
   MixHoldSideEnum,
   MixMarginModeEnum,
-  Profile,
 } from "../common/MapperType";
 import {
-  QuickExitFilter,
-  StandardFilter,
-  StandardFilterWithoutNotFar,
-  StandardFilterWithoutRoi,
-  DevFilter,
+  createInvestorProdFilters,
 } from "../filter/Filter";
 
-// NOTE: Présets extraits de l'ancienne grosse classe InvestorFactory pour alléger le bundle.
-// Ils gardent exactement les mêmes valeurs qu'avant pour compatibilité.
-export const PRESETS: Record<
-  InvestorType,
-  {
-    strategies: { type: IndicatorType; params?: number[] }[];
-    filters: any[];
-    period: CandlestickIntervalEnum;
-    position: MixHoldSideEnum | null;
-    leverage: number;
-    marginMode: MixMarginModeEnum;
-    exit: boolean | null;
-    activeLimit: boolean;
-    profiles: Profile[];
-    riskRange?: [number, number];
-  }
-> = {
-  conservative: {
-    strategies: [{ type: "MACD" }, { type: "ENV" }],
-    filters: [new StandardFilterWithoutRoi()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 3,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0, 0.2],
-  },
-  moderate: {
-    strategies: [{ type: "OR_MACD_ENV" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 5,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.2, 0.5],
-  },
-  balanced: {
-    strategies: [{ type: "OR_MACD_ENV" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 5,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.25, 0.55],
-  },
-  aggressive: {
-    strategies: [{ type: "DOUBLE_AVG" }, { type: "TRIPLE_AVG" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 10,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.5, 0.8],
-  },
-  momentum: {
-    strategies: [{ type: "DOUBLE_AVG" }],
-    filters: [new StandardFilterWithoutNotFar()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 7,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.45, 0.75],
-  },
-  contrarian: {
-    strategies: [{ type: "ENV" }],
-    filters: [new StandardFilterWithoutRoi()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 5,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.35, 0.6],
-  },
-  trend_sniper: {
-    strategies: [{ type: "TRIPLE_AVG" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 8,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.55, 0.8],
-  },
-  stable_seeker: {
-    strategies: [{ type: "MACD" }],
-    filters: [new StandardFilterWithoutNotFar()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 3,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.15, 0.35],
-  },
-  degen: {
-    strategies: [{ type: "ADAPTIVE" }],
-    filters: [new DevFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 15,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.8, 1],
-  },
-  microcap: {
-    strategies: [{ type: "ADAPTIVE_WITH_TRAILING" }],
-    filters: [new QuickExitFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 5,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.7, 0.95],
-  },
-  sentiment: {
-    strategies: [{ type: "OR_MACD_ENV" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 5,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.4, 0.65],
-  },
-  ath_rebound: {
-    strategies: [{ type: "TRIPLE_AVG" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 6,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.45, 0.7],
-  },
-  macd_master: {
-    strategies: [{ type: "MACD" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 10,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.55, 0.85],
-  },
-  envelope_strategist: {
-    strategies: [{ type: "ENV" }],
-    filters: [new StandardFilterWithoutNotFar()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 7,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.4, 0.65],
-  },
-  active_trader: {
-    strategies: [{ type: "DOUBLE_AVG" }, { type: "TRIPLE_AVG" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.FIFTEEN_MINUTES,
-    position: null,
-    leverage: 12,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.5, 0.8],
-  },
-  speculative_gem: {
-    strategies: [{ type: "ADAPTIVE_WITH_TRAILING" }, { type: "ADAPTIVE" }],
-    filters: [new QuickExitFilter()],
-    period: CandlestickIntervalEnum.HALF_HOURLY,
-    position: null,
-    leverage: 10,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.8, 1],
-  },
-  institutional: {
-    strategies: [{ type: "MACD" }, { type: "ENV" }],
-    filters: [new StandardFilterWithoutRoi()],
-    period: CandlestickIntervalEnum.FOUR_HOURLY,
-    position: null,
-    leverage: 3,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.15, 0.4],
-  },
-  defi: {
-    strategies: [{ type: "ADAPTIVE" }, { type: "ENV" }],
-    filters: [new StandardFilter()],
-    period: CandlestickIntervalEnum.HOURLY,
-    position: null,
-    leverage: 6,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.4, 0.7],
-  },
-  sustainable: {
-    strategies: [{ type: "MACD" }, { type: "ENV" }],
-    filters: [new StandardFilterWithoutNotFar()],
-    period: CandlestickIntervalEnum.FOUR_HOURLY,
-    position: null,
-    leverage: 2,
-    marginMode: MixMarginModeEnum.CROSSED,
-    exit: null,
-    activeLimit: false,
-    profiles: [Profile.FUTURE, Profile.DEV],
-    riskRange: [0.1, 0.35],
-  },
-};
+
+export const getSymbols = (): string[] => {
+  return [
+    ...new Set([
+      "ETH", "BNB", "SOL",
+      "XRP", "XLM",
+      "USDC",
+      "BTC",
+      "UNI", "AAVE", "CRV", "COMP", "MKR",
+      "APE", "MANA", "SAND",
+      "RNDR", "FET", "GRT", "INJ", "AGIX",
+      "ADA", "AVAX",
+      "LTC", "BCH",
+      "XMR", "ZEC",
+    ]),
+  ];
+}
+
+export const getPeriods = () : CandlestickIntervalEnum[] => {
+  return [
+    CandlestickIntervalEnum.FIFTEEN_MINUTES,
+    CandlestickIntervalEnum.HALF_HOURLY,
+    CandlestickIntervalEnum.HOURLY,
+    CandlestickIntervalEnum.FOUR_HOURLY,
+    CandlestickIntervalEnum.DAILY,
+  ];
+}
+
+export const getStrategies = () : { type: IndicatorType }[] => {
+  return [
+    { type: "MACD" as IndicatorType },
+    { type: "ENV" as IndicatorType },
+    { type: "OR_MACD_ENV" as IndicatorType },
+    { type: "DOUBLE_AVG" as IndicatorType },
+    { type: "TRIPLE_AVG" as IndicatorType },
+    { type: "ADAPTIVE" as IndicatorType },
+    { type: "ADAPTIVE_WITH_TRAILING" as IndicatorType },
+  ];
+}
+
+export const getExitPossibilities = () : (boolean | null)[] => {
+  return [true, null];
+}
+
+export const getPositions = () : (MixHoldSideEnum | null)[] => {
+  return [MixHoldSideEnum.LONG, MixHoldSideEnum.SHORT, null];
+}
+
+export const investorFilters = createInvestorProdFilters();
+
+export const getLeverageRange = () : number[] => {
+  return [1, 15];
+}
+
+export const getMarginModes = () : MixMarginModeEnum[] => {
+  return [MixMarginModeEnum.CROSSED, MixMarginModeEnum.FIXED];
+}
+
+export const getInitialBalanceRange = () : [number, number] => {
+  return [5000, 10000];
+}
+
+
+export const getMaxPositionSizeRange = () : [number, number] => {
+  return [0.1, 0.5];
+}
+
+export const getRiskToleranceRanges = () : [number, number] => {
+  return [0.005, 0.035];
+}
+
+export const getRiskMinRange = () : number[] => {
+  return [0, 0.8];
+}
+
+export const getRiskMaxRange = () : number[] => {
+  return [0.2, 1];
+}
+

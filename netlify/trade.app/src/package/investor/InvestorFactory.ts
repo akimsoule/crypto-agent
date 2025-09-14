@@ -1,124 +1,161 @@
-// Allégé: la logique initiale volumineuse est déplacée dans InvestorPresets.
-// Ce fichier expose une API stable en construisant les groupes à la volée.
-
 import {
-  CandlestickIntervalEnum,
-  FutureGroup,
-  MixHoldSideEnum,
-  MixMarginModeEnum,
-  Params,
-  Profile,
-  SpotGroup,
-  InvestorType,
-  IndicatorType,
+	CandlestickIntervalEnum,
+	FutureGroup,
+	IndicatorType,
+	MixHoldSideEnum,
+	MixMarginModeEnum,
+	Profile,
 } from "../common/MapperType";
 import {
-  StandardFilter,
-  StandardFilterWithoutRoi,
-  StandardFilterWithoutNotFar,
-  QuickExitFilter,
-  DevFilter,
-} from "../filter/Filter";
-import { PRESETS } from "./InvestorPresets";
+	getPeriods,
+	getStrategies,
+	getExitPossibilities,
+	getPositions,
+	investorFilters,
+	getLeverageRange,
+	getMarginModes,
+	getRiskMinRange,
+	getRiskMaxRange,
+	getSymbols,
+} from "./InvestorPresets";
+// Filtres résolus via investorFilters (depuis InvestorPresets)
 
-export type StrategySpec = { type: IndicatorType; params?: number[] };
-export interface InvestorFactoryOptions {
-  name: string;
-  symbols: string[];
-  strategies: StrategySpec[];
-  filters?: (
-    | StandardFilter
-    | StandardFilterWithoutRoi
-    | StandardFilterWithoutNotFar
-    | QuickExitFilter
-    | DevFilter
-  )[]; // compat typé
-  period?: CandlestickIntervalEnum;
-  position?: MixHoldSideEnum | null;
-  leverage?: number;
-  marginMode?: MixMarginModeEnum;
-  exit?: boolean | null;
-  activeLimit?: boolean;
-  profiles?: Profile[];
-  riskRange?: [number, number];
+type SeedInvestorLike = { id?: string; name?: string; type?: string };
+
+type InvestorComposition = {
+	profiles: Profile[];
+	futureParam: { groups: FutureGroup[] };
+	spotParam: { groups: [] };
+	// alias pratique pour le seed
+	groups: FutureGroup[];
+	// plage de risque optionnelle exposée pour la persistance
+	riskRange?: [number, number];
+};
+
+function toUsdtPair(sym: string): string {
+	// Si le symbole fourni contient déjà USDT, le laisser tel quel
+	if (/USDT$/.test(sym)) return sym;
+	return `${sym}USDT`;
 }
 
-export interface InvestorComposition {
-  name: string;
-  params: Params;
-  groups: FutureGroup[];
-  riskRange?: [number, number];
+function hashCode(s: string): number {
+	let h = 0;
+	for (let i = 0; i < s.length; i++) {
+		h = (h << 5) - h + s.charCodeAt(i);
+		h |= 0; // 32-bit
+	}
+	return Math.abs(h);
+}
+
+function pickByIndex<T>(arr: T[], idxSeed: number, fallback: T): T {
+	if (!arr || arr.length === 0) return fallback;
+	const idx = idxSeed % arr.length;
+	return arr[idx];
+}
+
+function mapTypeToFilter(type: string | undefined) {
+	const t = (type || "").toLowerCase();
+	// Mapping simple -> filtres investisseurs (prod)
+	if (t.includes("conserv")) return investorFilters.conservative;
+	if (t.includes("balance") || t.includes("moderate") || t.includes("moderate"))
+		return investorFilters.balanced;
+	if (t.includes("aggress") || t.includes("degen"))
+		return investorFilters.aggressive;
+
+	// Quelques archétypes -> mapping par défaut
+	if (t.includes("institution")) return investorFilters.conservative;
+	if (t.includes("stable")) return investorFilters.conservative;
+	if (t.includes("trend") || t.includes("momentum")) return investorFilters.balanced;
+	if (t.includes("microcap") || t.includes("speculative")) return investorFilters.aggressive;
+
+	// fallback équilibré
+	return investorFilters.balanced;
 }
 
 export class InvestorFactory {
-  static buildGroups(o: InvestorFactoryOptions): FutureGroup[] {
-    const period = o.period ?? CandlestickIntervalEnum.HOURLY;
-    const position = o.position ?? MixHoldSideEnum.LONG;
-    const filters = (o.filters?.length ? o.filters : [new StandardFilter()]);
-    const leverage = o.leverage ?? 5;
-    const marginMode = o.marginMode ?? MixMarginModeEnum.CROSSED;
-    const exit = o.exit === true ? true : null;
-    const activeLimit = o.activeLimit ?? false;
-    const groups: FutureGroup[] = [];
-    for (const strat of o.strategies) {
-      for (const filter of filters) {
-        groups.push({
-          period,
-            indicator: { type: strat.type, params: strat.params },
-            exit,
-            position,
-            activeLimit,
-            filter,
-            margeLeverage: leverage,
-            marginMode,
-            symbols: [...o.symbols],
-        });
-      }
-    }
-    return groups;
-  }
+	static fromInvestor(
+		investor: SeedInvestorLike,
+		inputSymbols: string[] = [],
+		options: Partial<{ leverage: number }> = {}
+	): InvestorComposition {
+		const seedStr = `${investor.type || ""}-${investor.name || ""}`;
+		const seedIdx = hashCode(seedStr);
 
-  static buildParams(o: InvestorFactoryOptions): InvestorComposition {
-    const groups = this.buildGroups(o);
-    const profiles = o.profiles ?? [Profile.FUTURE, Profile.DEV];
-    const params: Params = {
-      futureParam: { groups },
-      spotParam: { groups: [] as SpotGroup[] },
-      profiles,
-    };
-    return { name: o.name, params, groups, riskRange: o.riskRange };
-  }
+		// Symbols: utiliser ceux fournis, sinon les presets
+		const baseSymbols = inputSymbols.length > 0 ? inputSymbols : getSymbols();
+		const symbols = baseSymbols.map(toUsdtPair);
 
-  static fromInvestor(
-    investor: { id: string; name: string; type: string },
-    symbols: string[],
-    overrides?: Partial<InvestorFactoryOptions & { strategies: StrategySpec[] }>
-  ): InvestorComposition {
-    const preset = PRESETS[investor.type as InvestorType] ?? PRESETS["balanced"];
-    const strategies = overrides?.strategies ?? preset.strategies;
-    const filters = overrides?.filters ?? preset.filters;
-    const period = overrides?.period ?? preset.period;
-    const position = overrides?.position ?? preset.position ?? MixHoldSideEnum.LONG;
-    const leverage = overrides?.leverage ?? preset.leverage;
-    const marginMode = overrides?.marginMode ?? preset.marginMode;
-    const exit = overrides?.exit ?? preset.exit;
-    const activeLimit = overrides?.activeLimit ?? preset.activeLimit;
-    const profiles = overrides?.profiles ?? preset.profiles;
-    const riskRange = overrides?.riskRange ?? preset.riskRange;
-    return this.buildParams({
-      name: investor.name,
-      symbols,
-      strategies,
-      filters,
-      period,
-      position,
-      leverage,
-      marginMode,
-      exit,
-      activeLimit,
-      profiles,
-      riskRange,
-    });
-  }
+		// Sélections via getters
+		const periods = getPeriods();
+		const strategies = getStrategies();
+		const exits = getExitPossibilities();
+		const positions = getPositions();
+		const marginModes = getMarginModes();
+		const [levMin, levMax] = getLeverageRange();
+
+		const period: CandlestickIntervalEnum = pickByIndex(
+			periods,
+			seedIdx,
+			CandlestickIntervalEnum.HOURLY
+		);
+		const strategy = pickByIndex(
+			strategies,
+			seedIdx,
+			{ type: "MACD" as IndicatorType }
+		);
+		const exit = pickByIndex(exits, seedIdx, false);
+		const position = pickByIndex<(MixHoldSideEnum | null)>(
+			positions,
+			seedIdx,
+			null
+		);
+		const marginMode = pickByIndex(
+			marginModes,
+			seedIdx,
+			MixMarginModeEnum.CROSSED
+		);
+
+		const leverage = options.leverage
+			? Math.max(levMin, Math.min(options.leverage, levMax))
+			: Math.min(levMax, Math.max(levMin, 5));
+
+		// Filtre investisseur uniquement
+		const filter = mapTypeToFilter(investor.type);
+
+		// Risk range à partir des getters
+		const riskMins = getRiskMinRange();
+		const riskMaxs = getRiskMaxRange();
+		let riskRange: [number, number] | undefined;
+		if (riskMins.length && riskMaxs.length) {
+			const min = pickByIndex(riskMins, seedIdx, riskMins[0]);
+			const max = pickByIndex(riskMaxs, seedIdx, riskMaxs[riskMaxs.length - 1]);
+			riskRange = [Math.min(min, max), Math.max(min, max)];
+		}
+
+			const group: FutureGroup = {
+			period,
+			indicator: { type: strategy.type },
+			exit,
+				filter,
+			activeLimit: false,
+			orderSize: undefined,
+			symbols,
+			position,
+			margeLeverage: leverage,
+			marginMode,
+		} as unknown as FutureGroup;
+
+		const groups: FutureGroup[] = [group];
+
+		return {
+			profiles: [Profile.FUTURE],
+			futureParam: { groups },
+			spotParam: { groups: [] },
+			groups,
+			riskRange,
+		};
+	}
 }
+
+export default InvestorFactory;
 

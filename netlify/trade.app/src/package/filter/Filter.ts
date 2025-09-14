@@ -440,26 +440,67 @@ class InvestorProdFilter extends BaseFilter {
   }
 }
 
-['A', 'B', 'C'].map(() => {
-  // create a filter
-  new (class extends BaseFilter {
-    public filters: AndFilter;
+// création de plusieurs filtres pour investisseurs en prod
+// Trois profils standards: conservateur, équilibré, agressif
+class InvestorProdFilterConservative extends BaseFilter {
+  public filters: AndFilter;
+  constructor() {
+    super();
+    // Seuils plus prudents: drawdown -15%, up +3%, take profit +6%
+    const roi = new FilterRoi(-15, 3, 6);
+    this.filters = new AndFilter([
+      new FilterSignal(),
+      new FilterProd(),
+      roi,
+      new FilterPositionNotFar(),
+    ]);
+  }
+  mustEnter(tp: TradeParam): boolean { return this.filters.mustEnter(tp); }
+  mustExit(tp: TradeParam): boolean { return this.filters.mustExit(tp); }
+}
 
-    constructor() {
-      super();
-      this.filters = new AndFilter([new FilterSignal(), new FilterRoi()]);
-    }
+class InvestorProdFilterBalanced extends BaseFilter {
+  public filters: AndFilter;
+  constructor() {
+    super();
+    // Valeurs par défaut: drawdown -25%, up +5%, take profit +10%
+    const roi = new FilterRoi(-25, 5, 10);
+    this.filters = new AndFilter([
+      new FilterSignal(),
+      new FilterProd(),
+      roi,
+      new FilterPositionNotFar(),
+    ]);
+  }
+  mustEnter(tp: TradeParam): boolean { return this.filters.mustEnter(tp); }
+  mustExit(tp: TradeParam): boolean { return this.filters.mustExit(tp); }
+}
 
-    mustEnter(tradeParam: TradeParam): boolean {
-      return this.filters.mustEnter(tradeParam);
-    }
+class InvestorProdFilterAggressive extends BaseFilter {
+  public filters: AndFilter;
+  constructor() {
+    super();
+    // Plus permissif: drawdown -40%, up +8%, take profit +15%
+    const roi = new FilterRoi(-40, 8, 15);
+    this.filters = new AndFilter([
+      new FilterSignal(),
+      new FilterProd(),
+      roi,
+      new FilterPositionNotFar(),
+    ]);
+  }
+  mustEnter(tp: TradeParam): boolean { return this.filters.mustEnter(tp); }
+  mustExit(tp: TradeParam): boolean { return this.filters.mustExit(tp); }
+}
 
-    mustExit(tradeParam: TradeParam): boolean {
-      return this.filters.mustExit(tradeParam);
-    }
-
-  })();
-});
+// Fabrique pratique pour récupérer les presets
+export function createInvestorProdFilters() {
+  return {
+    conservative: new InvestorProdFilterConservative(),
+    balanced: new InvestorProdFilterBalanced(),
+    aggressive: new InvestorProdFilterAggressive(),
+  } as const;
+}
 
 
 export {
@@ -481,4 +522,7 @@ export {
   OrFilter,
   InvestorDevFilter,
   InvestorProdFilter,
+  InvestorProdFilterConservative,
+  InvestorProdFilterBalanced,
+  InvestorProdFilterAggressive,
 };

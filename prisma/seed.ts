@@ -7,9 +7,10 @@ import { MixMarginModeEnum } from "../netlify/trade.app/src/package/common/Mappe
 const prisma = new PrismaClient();
 
 /*
-  Seed des investisseurs basé sur les presets de InvestorFactory.
-  On stocke un sous-ensemble de presets avec des valeurs financières par défaut.
-  Ajuste les listes de symbols selon ton univers de trading réel.
+  Seed refactorisé des investisseurs utilisant:
+  - Uniquement Profile.FUTURE
+  - Uniquement les filtres d'investisseurs
+  - Structure plus simple et maintenable
 */
 
 type SeedInvestor = {
@@ -25,24 +26,19 @@ type SeedInvestor = {
   exit?: boolean;
   initialBalance: number;
   maxPositionSize: number;
-  riskTolerance: number; // 0-1 (ex: 0.02 = 2%)
+  riskTolerance: number;
   isActive?: boolean;
   riskMin?: number | null;
   riskMax?: number | null;
 };
 
-// Mapping simplifié: strategyName = premier indicator type du preset
-// filter = nom de classe du premier filtre
-
-// Sélection de symboles par défaut (adapter)
+// Sélection de symboles par défaut - concentrés sur les principales crypto
 const DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
-// Construction dynamique minimale à partir de PRESETS accessibles via Factory
-// On ne peut pas importer directement la constante PRESETS (non exportée), donc on reconstitue
-// une liste de types connus alignés avec InvestorType.
+// Types d'investisseurs supportés (alignés avec InvestorType)
 const INVESTOR_TYPES: string[] = [
   "conservative",
-  "moderate", // nouveau type (tolérance risque 0.2-0.5)
+  "moderate", 
   "balanced",
   "aggressive",
   "momentum",
@@ -55,7 +51,6 @@ const INVESTOR_TYPES: string[] = [
   "ath_rebound",
   "macd_master",
   "envelope_strategist",
-  // Nouveaux archétypes ajoutés au PRESETS
   "active_trader",
   "speculative_gem",
   "institutional",
@@ -63,11 +58,8 @@ const INVESTOR_TYPES: string[] = [
   "sustainable",
 ];
 
-// Valeurs financières par profil (ex: plus de levier -> plus petit maxPositionSize / riskTolerance)
-const FIN_RULES: Record<
-  string,
-  { initial: number; maxPos: number; risk: number }
-> = {
+// Valeurs financières simplifiées par profil de risque
+const FINANCIAL_PROFILES: Record<string, { initial: number; maxPos: number; risk: number }> = {
   conservative: { initial: 5000, maxPos: 300, risk: 0.01 },
   moderate: { initial: 7500, maxPos: 480, risk: 0.016 },
   balanced: { initial: 8000, maxPos: 500, risk: 0.015 },
@@ -89,121 +81,109 @@ const FIN_RULES: Record<
   sustainable: { initial: 6500, maxPos: 400, risk: 0.013 },
 };
 
-// Catégories macro de crypto-actifs -> liste de symboles (adapter selon ton univers)
-const CATEGORY_SYMBOLS: Record<string, string[]> = {
+// Catégories crypto avec symboles associés
+const CRYPTO_CATEGORIES: Record<string, string[]> = {
   payment: ["BTCUSDT", "LTCUSDT", "BCHUSDT"],
-  stablecoin: ["USDCUSDT"], // placeholders (rarement tradés directement)
   utility: ["ETHUSDT", "BNBUSDT", "SOLUSDT"],
   governance: ["UNIUSDT", "AAVEUSDT", "MKRUSDT"],
-  nft: ["APEUSDT", "MANAUSDT", "SANDUSDT"],
-  privacy: ["XMRUSDT", "ZECUSDT"],
-  smart_contract: ["ETHUSDT", "ADAUSDT", "SOLUSDT", "AVAXUSDT"],
   enterprise: ["XRPUSDT", "XLMUSDT"],
   defi: ["UNIUSDT", "AAVEUSDT", "CRVUSDT", "COMPUSDT"],
-  ai: ["RNDRUSDT", "FETUSDT", "GRTUSDT", "INJUSDT", "AGIXUSDT"],
+  ai: ["RNDRUSDT", "FETUSDT", "GRTUSDT", "INJUSDT"],
 };
 
-// Règles financières spécifiques par catégorie (fallback -> balanced)
-const CATEGORY_RULES: Record<
-  string,
-  { initial: number; maxPos: number; risk: number; leverage: number }
-> = {
+// Règles financières par catégorie
+const CATEGORY_FINANCIAL_RULES: Record<string, { initial: number; maxPos: number; risk: number; leverage: number }> = {
   payment: { initial: 9000, maxPos: 600, risk: 0.015, leverage: 5 },
-  stablecoin: { initial: 5000, maxPos: 200, risk: 0.005, leverage: 2 },
   utility: { initial: 9500, maxPos: 650, risk: 0.018, leverage: 6 },
   governance: { initial: 8000, maxPos: 500, risk: 0.017, leverage: 5 },
-  nft: { initial: 6000, maxPos: 350, risk: 0.022, leverage: 4 },
-  privacy: { initial: 7000, maxPos: 400, risk: 0.02, leverage: 5 },
-  smart_contract: { initial: 10000, maxPos: 700, risk: 0.02, leverage: 6 },
   enterprise: { initial: 7500, maxPos: 450, risk: 0.015, leverage: 4 },
   defi: { initial: 8500, maxPos: 550, risk: 0.02, leverage: 5 },
   ai: { initial: 9000, maxPos: 600, risk: 0.022, leverage: 6 },
 };
 
-async function upsertInvestor(i: SeedInvestor) {
+/**
+ * Fonction utilitaire pour extraire l'ID d'intervalle
+ */
+function getIntervalId(period: unknown): string {
+  if (!period) return "1H";
+  const periodObj = period as { futureIntervalId?: string; spotIntervalId?: string };
+  return periodObj.futureIntervalId || periodObj.spotIntervalId || "1H";
+}
+
+/**
+ * Upsert un investisseur dans la base de données
+ */
+async function upsertInvestor(investor: SeedInvestor): Promise<void> {
   await prisma.investorProfile.upsert({
-    where: { name: i.name },
+    where: { name: investor.name },
     update: {
-      symbols: i.symbols,
-      strategyName: i.strategyName,
-      filter: i.filter,
-      period: i.period,
-      leverage: i.leverage,
-      marginMode: i.marginMode,
-      position: i.position ?? undefined,
-      exit: i.exit ?? null,
-      initialBalance: i.initialBalance,
-      maxPositionSize: i.maxPositionSize,
-      riskTolerance: i.riskTolerance,
-      isActive: i.isActive ?? true,
-      type: i.type,
-      riskMin: i.riskMin ?? null,
-      riskMax: i.riskMax ?? null,
+      symbols: investor.symbols,
+      strategyName: investor.strategyName,
+      filter: investor.filter,
+      period: investor.period,
+      leverage: investor.leverage,
+      marginMode: investor.marginMode,
+      position: investor.position ?? undefined,
+      exit: investor.exit ?? null,
+      initialBalance: investor.initialBalance,
+      maxPositionSize: investor.maxPositionSize,
+      riskTolerance: investor.riskTolerance,
+      isActive: investor.isActive ?? true,
+      type: investor.type,
+      riskMin: investor.riskMin ?? null,
+      riskMax: investor.riskMax ?? null,
     },
     create: {
-      name: i.name,
-      type: i.type,
-      symbols: i.symbols,
-      strategyName: i.strategyName,
-      filter: i.filter,
-      period: i.period,
-      leverage: i.leverage,
-      marginMode: i.marginMode,
-      position: i.position ?? null,
-      exit: i.exit ?? null,
-      initialBalance: i.initialBalance,
-      maxPositionSize: i.maxPositionSize,
-      riskTolerance: i.riskTolerance,
-      isActive: i.isActive ?? true,
-      riskMin: i.riskMin ?? null,
-      riskMax: i.riskMax ?? null,
+      name: investor.name,
+      type: investor.type,
+      symbols: investor.symbols,
+      strategyName: investor.strategyName,
+      filter: investor.filter,
+      period: investor.period,
+      leverage: investor.leverage,
+      marginMode: investor.marginMode,
+      position: investor.position ?? null,
+      exit: investor.exit ?? null,
+      initialBalance: investor.initialBalance,
+      maxPositionSize: investor.maxPositionSize,
+      riskTolerance: investor.riskTolerance,
+      isActive: investor.isActive ?? true,
+      riskMin: investor.riskMin ?? null,
+      riskMax: investor.riskMax ?? null,
     },
   });
 }
 
-export async function main() {
-  console.log("Seeding investors...");
+/**
+ * Seed les investisseurs de base à partir des presets
+ */
+async function seedBaseInvestors(): Promise<void> {
+  console.log("Seeding base investors...");
 
-  const getIntervalId = (p: unknown): string => {
-    if (!p) return "1H";
-    const obj = p as { futureIntervalId?: string; spotIntervalId?: string };
-    return obj.futureIntervalId || obj.spotIntervalId || "1H";
-  };
-
-  // Pour obtenir les presets nous fabriquons un InvestorAgent factice par type et lisons le résultat
-  // via InvestorFactory.fromInvestor (qui applique les defaults de PRESETS).
   for (const type of INVESTOR_TYPES) {
-    // Construction d'un agent minimal
-    // Agent minimal conforme à InvestorAgent (propriétés supplémentaires neutres)
-    const agent = {
+    const mockInvestor = {
       id: `seed-${type}`,
       name: type,
       type: type,
-      riskTolerance: 0.01,
-      maxPositionSize: 0,
-      holdingPeriod: 0,
-      cooldown: 0,
-      lastActive: new Date(),
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
     };
+
     try {
-      const composition = InvestorFactory.fromInvestor(
-        agent,
-        DEFAULT_SYMBOLS,
-        {}
-      );
+      const composition = InvestorFactory.fromInvestor(mockInvestor, DEFAULT_SYMBOLS, {});
       const firstGroup = composition.groups[0];
-      const leverage = firstGroup.margeLeverage as number;
+      
+      if (!firstGroup) {
+        console.warn(`⚠️ No groups found for investor type ${type}`);
+        continue;
+      }
+
+      const leverage = firstGroup.margeLeverage;
       const periodValue = getIntervalId(firstGroup.period);
       const strategyName = firstGroup.indicator.type;
-      const filterInstance = firstGroup.filter;
-      const filterName = filterInstance.constructor?.name || "UnknownFilter";
+      const filterName = firstGroup.filter.constructor?.name || "UnknownFilter";
       const marginMode = firstGroup.marginMode ?? MixMarginModeEnum.CROSSED;
       const position = firstGroup.position ?? null;
 
-      const fin = FIN_RULES[type] || {
+      const financialProfile = FINANCIAL_PROFILES[type] || {
         initial: 5000,
         maxPos: 300,
         risk: 0.015,
@@ -220,43 +200,52 @@ export async function main() {
         marginMode: String(marginMode),
         position: position ? String(position) : null,
         exit: firstGroup.exit === true ? true : undefined,
-        initialBalance: fin.initial,
-        maxPositionSize: fin.maxPos,
-        riskTolerance: fin.risk,
+        initialBalance: financialProfile.initial,
+        maxPositionSize: financialProfile.maxPos,
+        riskTolerance: financialProfile.risk,
         isActive: true,
         riskMin: composition.riskRange ? composition.riskRange[0] : null,
         riskMax: composition.riskRange ? composition.riskRange[1] : null,
       });
+
       console.log(`✔ Seeded investor ${type}`);
-    } catch (e) {
-      console.error(
-        `❌ Failed seeding investor ${type}:`,
-        (e as Error).message
-      );
+    } catch (error) {
+      console.error(`❌ Failed seeding investor ${type}:`, (error as Error).message);
     }
   }
+}
 
-  // Ajout des investisseurs par catégorie macro
+/**
+ * Seed les investisseurs par catégorie crypto
+ */
+async function seedCategoryInvestors(): Promise<void> {
   console.log("Seeding category investors...");
-  for (const category of Object.keys(CATEGORY_SYMBOLS)) {
-    const symbols = CATEGORY_SYMBOLS[category];
-    const rule = CATEGORY_RULES[category] || {
+
+  for (const [category, symbols] of Object.entries(CRYPTO_CATEGORIES)) {
+    const rule = CATEGORY_FINANCIAL_RULES[category] || {
       initial: 8000,
       maxPos: 500,
       risk: 0.015,
       leverage: 5,
     };
-    // On réutilise InvestorFactory avec un type inconnu -> fallback preset balanced
-    const pseudoProfile = {
+
+    const mockProfile = {
       id: `cat-${category}`,
       name: `cat_${category}`,
       type: category,
     };
+
     try {
-      const composition = InvestorFactory.fromInvestor(pseudoProfile, symbols, {
+      const composition = InvestorFactory.fromInvestor(mockProfile, symbols, {
         leverage: rule.leverage,
       });
+      
       const group = composition.groups[0];
+      if (!group) {
+        console.warn(`⚠️ No groups found for category ${category}`);
+        continue;
+      }
+
       await upsertInvestor({
         name: `cat_${category}`,
         type: "future",
@@ -264,7 +253,7 @@ export async function main() {
         strategyName: group.indicator.type,
         filter: group.filter.constructor?.name || "StandardFilter",
         period: getIntervalId(group.period),
-        leverage: group.margeLeverage as number,
+        leverage: group.margeLeverage,
         marginMode: String(group.marginMode || MixMarginModeEnum.CROSSED),
         position: group.position ? String(group.position) : null,
         exit: group.exit === true ? true : undefined,
@@ -275,24 +264,94 @@ export async function main() {
         riskMin: composition.riskRange ? composition.riskRange[0] : null,
         riskMax: composition.riskRange ? composition.riskRange[1] : null,
       });
+
       console.log(`✔ Seeded category investor cat_${category}`);
-    } catch (e) {
-      console.error(
-        `❌ Failed seeding category ${category}`,
-        (e as Error).message
-      );
+    } catch (error) {
+      console.error(`❌ Failed seeding category ${category}:`, (error as Error).message);
     }
   }
+}
 
-  console.log("Seed investors complete.");
+/**
+ * Seed les presets de production explicites
+ */
+async function seedProductionPresets(): Promise<void> {
+  console.log("Seeding production investor presets...");
+  
+  const prodPresets = [
+    { key: "conservative_prod", baseType: "conservative" },
+    { key: "balanced_prod", baseType: "balanced" },
+    { key: "aggressive_prod", baseType: "aggressive" },
+  ] as const;
+
+  for (const preset of prodPresets) {
+    try {
+      const composition = InvestorFactory.fromInvestor(
+        { id: `seed-${preset.key}`, name: preset.key, type: preset.key },
+        DEFAULT_SYMBOLS,
+        {}
+      );
+      
+      const group = composition.groups[0];
+      if (!group) {
+        console.warn(`⚠️ No groups found for prod preset ${preset.key}`);
+        continue;
+      }
+
+      const financialProfile = FINANCIAL_PROFILES[preset.baseType] || {
+        initial: 8000,
+        maxPos: 500,
+        risk: 0.015,
+      };
+
+      await upsertInvestor({
+        name: preset.key,
+        type: "future",
+        symbols: DEFAULT_SYMBOLS,
+        strategyName: group.indicator.type,
+        filter: group.filter.constructor?.name || "StandardFilter",
+        period: getIntervalId(group.period),
+        leverage: group.margeLeverage,
+        marginMode: String(group.marginMode || MixMarginModeEnum.CROSSED),
+        position: group.position ? String(group.position) : null,
+        exit: group.exit === true ? true : undefined,
+        initialBalance: financialProfile.initial,
+        maxPositionSize: financialProfile.maxPos,
+        riskTolerance: financialProfile.risk,
+        isActive: true,
+        riskMin: composition.riskRange ? composition.riskRange[0] : null,
+        riskMax: composition.riskRange ? composition.riskRange[1] : null,
+      });
+
+      console.log(`✔ Seeded prod preset ${preset.key}`);
+    } catch (error) {
+      console.error(`❌ Failed seeding prod preset ${preset.key}:`, (error as Error).message);
+    }
+  }
+}
+
+export async function main(): Promise<void> {
+  console.log("🚀 Starting investor seeding process...");
+  console.log("📊 Using simplified structure with Profile.FUTURE only");
+
+  try {
+    await seedBaseInvestors();
+    await seedCategoryInvestors();
+    await seedProductionPresets();
+    
+    console.log("✅ Investor seeding completed successfully!");
+  } catch (error) {
+    console.error("❌ Error during seeding:", error);
+    throw error;
+  }
 }
 
 // Exécution directe (ESM friendly)
 const thisFile = fileURLToPath(import.meta.url);
 if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) {
   main()
-    .catch((e) => {
-      console.error(e);
+    .catch((error) => {
+      console.error(error);
       process.exit(1);
     })
     .finally(async () => {

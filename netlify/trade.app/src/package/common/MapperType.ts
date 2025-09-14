@@ -1,7 +1,15 @@
 // NOTE: Import initial de Action/Asset retiré pour compatibilité exécution seed (ESM + tsx nested import issue)
 // Redéclaration locale minimaliste (alignée avec netlify/trade.app/src/types/lib.ts) pour usage typage.
 import { BotParameter } from "../config/BotParameter";
-import { QuickExitFilter, StandardFilter } from "../filter/Filter";
+import {
+  QuickExitFilter,
+  StandardFilter,
+  InvestorDevFilter,
+  InvestorProdFilter,
+  InvestorProdFilterAggressive,
+  InvestorProdFilterBalanced,
+  InvestorProdFilterConservative,
+} from "../filter/Filter";
 
 export enum Action {
   SELL = -1,
@@ -51,7 +59,14 @@ type Params = {
   profiles: Profile[];
 };
 
-type FilterType = StandardFilter | QuickExitFilter;
+type FilterType =
+  | StandardFilter
+  | QuickExitFilter
+  | InvestorDevFilter
+  | InvestorProdFilter
+  | InvestorProdFilterAggressive
+  | InvestorProdFilterBalanced
+  | InvestorProdFilterConservative;
 
 interface CommonGroup {
   period: CandlestickIntervalEnum;
