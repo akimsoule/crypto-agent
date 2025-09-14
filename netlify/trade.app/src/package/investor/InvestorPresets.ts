@@ -48,8 +48,8 @@ export const getStrategies = () : { type: IndicatorType }[] => {
   ];
 }
 
-export const getExitPossibilities = () : (boolean | null)[] => {
-  return [true, null];
+export const getExitPossibilities = () : (null)[] => {
+  return [null];
 }
 
 export const getPositions = () : (MixHoldSideEnum | null)[] => {
