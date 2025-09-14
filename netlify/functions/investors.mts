@@ -12,7 +12,10 @@ export default endpoint({
   handler: async ({ req, prisma }) => {
     const url = new URL(req.url);
     const sideParam = (url.searchParams.get("side") || "").toLowerCase();
-    const onlySide = sideParam === "long" || sideParam === "short" ? (sideParam as "long" | "short") : undefined;
+    const onlySide =
+      sideParam === "long" || sideParam === "short"
+        ? (sideParam as "long" | "short")
+        : undefined;
     const profiles = await prisma.investorProfile.findMany({
       where: { isActive: true },
       orderBy: { createdAt: "asc" },
@@ -43,14 +46,18 @@ export default endpoint({
         )
       )
     );
-  const priceMap = await getPriceMap(allBaseSymbols, { ttlMs: 15_000 });
+    const priceMap = await getPriceMap(allBaseSymbols, { ttlMs: 15_000 });
 
     return profiles.map((p) => {
       const initialBalance = p.initialBalance ?? 0;
 
       // Reconstruire les positions ouvertes à partir des ORDERS (lissage) + PnL via mark price
-  const states = reconstructStates((p.Order ?? []) as any, { onlySide });
-  const { totalUnrealized, activePositions } = computeUnrealized(states, priceMap, { onlySide });
+      const states = reconstructStates((p.Order ?? []) as any, { onlySide });
+      const { totalUnrealized, activePositions } = computeUnrealized(
+        states,
+        priceMap,
+        { onlySide }
+      );
 
       const totalValue = initialBalance + totalUnrealized;
       const totalReturn = totalValue - initialBalance;

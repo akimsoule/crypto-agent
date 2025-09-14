@@ -8,13 +8,6 @@ import {
   toNum,
 } from "./_lib/pnl.mts";
 
-// Helpers locaux (limiter l'impact sur le reste du code)
-// toNum vient de pnl.mts
-
-function daysBetween(a: Date, b: Date): number {
-  const ms = Math.abs(b.getTime() - a.getTime());
-  return Math.floor(ms / 86_400_000);
-}
 
 export default endpoint({
   methods: ["GET"],
