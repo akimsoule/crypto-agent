@@ -13,7 +13,7 @@ import {
 class CustomTelegramBot extends TelegramBot {
   private botParameter: BotParameter;
   private lastSent: Map<string, number> = new Map();
-  private static readonly DEDUP_WINDOW_MS = 5_000;
+  private static readonly DEDUP_WINDOW_MS = 10_000;
 
   constructor(
     token: string,
