@@ -12,6 +12,8 @@ import {
 
 class CustomTelegramBot extends TelegramBot {
   private botParameter: BotParameter;
+  private lastSent: Map<string, number> = new Map();
+  private static readonly DEDUP_WINDOW_MS = 5_000;
 
   constructor(
     token: string,
@@ -27,6 +29,15 @@ class CustomTelegramBot extends TelegramBot {
     text: string,
     options?: TelegramBot.SendMessageOptions
   ): Promise<TelegramBot.Message> {
+    // Anti-spam: si le même message est envoyé au même chat < 5s, on ignore
+    const key = `${String(chatId)}::${text}`;
+    const now = Date.now();
+    const last = this.lastSent.get(key) ?? 0;
+    if (now - last < CustomTelegramBot.DEDUP_WINDOW_MS) {
+      return Promise.resolve({} as TelegramBot.Message);
+    }
+    this.lastSent.set(key, now);
+
     if (this.botParameter.isProdEnv()) {
       return super.sendMessage(chatId, text, options);
     } else {

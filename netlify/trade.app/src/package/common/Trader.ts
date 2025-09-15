@@ -101,12 +101,10 @@ class Trader extends HandleTrader {
         console.log(e);
       }
 
-      console.log("Sending Telegram message:", message);
-
-      // await this.config.telegramClient.sendMessage(
-      //   this.config.telegramGroupOrderId,
-      //   message
-      // );
+      await this.config.telegramClient.sendMessage(
+        this.config.telegramGroupOrderId,
+        message
+      );
     }
   };
 
