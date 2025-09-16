@@ -1,12 +1,6 @@
-import {
-  Group,
-  JSONObject,
-  MixHoldSideEnum,
-  Profile,
-  TradeParam,
-} from "./MapperType";
+import { Group, JSONObject, MixHoldSideEnum, TradeParam } from "./MapperType";
 import { InvestorProfile } from "@prisma/client";
-import { Config, SecondaryAccountConfig } from "./Config";
+import { Config } from "./Config";
 import { HandleTrader } from "./HandleTrader";
 import * as asciichart from "asciichart";
 import { Account } from "./Account";
@@ -16,7 +10,6 @@ import { FutureAccount } from "../future/FutureAccount";
 import { FutureInvestorAccount } from "../future/investor/FutureInvestorAccount";
 import { getStrategy } from "../strategy";
 import { SpotAccount } from "../spot/SpotAccount";
-import axios from "axios";
 import { Asset } from "../../types/lib";
 import { persistOrder, persistPositions } from "./Persistence";
 
@@ -56,55 +49,6 @@ class Trader extends HandleTrader {
           await this.tradeSymbol(symbol, group);
         }
       }
-    }
-
-    const toDate = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "America/Toronto" })
-    );
-    const hour = toDate.getHours();
-    const minute = toDate.getMinutes();
-    const configName =
-      this.config instanceof SecondaryAccountConfig
-        ? "Secondary config"
-        : "Main config";
-    let accountName = "";
-    if (this.account instanceof FutureAccount) {
-      accountName = "FutureAccount";
-    } else if (this.account instanceof SpotAccount) {
-      accountName = "SpotAccount";
-    } else if (this.account instanceof FutureInvestorAccount) {
-      accountName = "FutureInvestorAccount";
-    } else {
-      accountName = "Null";
-    }
-    let message = `[From:${process.platform} - ${configName} - ${accountName}][At:${hour
-      .toString()
-      .padStart(2, "0")}:${minute.toString().padStart(2, "0")}]`;
-
-    if (this.message && this.message.length > 0) {
-      message += "\n" + this.message;
-    }
-
-    console.log(message);
-
-    if (
-      process.env.APP_ENV === Profile.PROD &&
-      (hour === 8 || hour === 16) &&
-      minute >= 0 &&
-      minute <= 3
-    ) {
-      try {
-        const data = (await axios.get("https://zenquotes.io/api/random")).data;
-        const quote = data[0]; // Accède au premier élément du tableau
-        message += `\n${quote.q} By ${quote.a}`;
-      } catch (e) {
-        console.log(e);
-      }
-
-      await this.config.telegramClient.sendMessage(
-        this.config.telegramGroupOrderId,
-        message
-      );
     }
   };
 

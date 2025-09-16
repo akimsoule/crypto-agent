@@ -132,4 +132,4 @@ class SecondaryAccountConfig extends Config {
   }
 }
 
-export { Config, SecondaryAccountConfig };
+export {CustomTelegramBot, Config, SecondaryAccountConfig };

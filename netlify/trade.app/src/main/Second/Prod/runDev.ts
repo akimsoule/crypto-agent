@@ -1,5 +1,8 @@
 import { InvestorProfile, PrismaClient } from "@prisma/client";
-import { SecondaryAccountConfig } from "../../../package/common/Config";
+import {
+  CustomTelegramBot,
+  SecondaryAccountConfig,
+} from "../../../package/common/Config";
 import {
   FutureGroup,
   MixHoldSideEnum,
@@ -19,6 +22,7 @@ import {
   normalizeSymbols,
   mapIndicator,
 } from "../../../package/common/MapperLib";
+import axios from "axios";
 
 // Runner dev basé sur la configuration stockée en base
 export async function runDev(profs?: Profile[]): Promise<void> {
@@ -37,6 +41,8 @@ export async function runDev(profs?: Profile[]): Promise<void> {
 
     // Accumule les couples (investorId, symbol) exécutés pour batch upsert
     const executed: { profileId: string; symbol: string }[] = [];
+
+    let telegramClient: CustomTelegramBot | undefined = undefined;
 
     for (const inv of investors) {
       const symbols = normalizeSymbols(inv.symbols as string[] | null);
@@ -91,7 +97,12 @@ export async function runDev(profs?: Profile[]): Promise<void> {
             },
           })
         );
-        await new Runner(new SecondaryAccountConfig(params)).run(inv);
+        const config = new SecondaryAccountConfig(params);
+        if (!telegramClient) {
+          telegramClient = config.telegramClient;
+        }
+        const runner = new Runner(config);
+        await runner.run(inv);
         // Enregistre les symboles visités
         for (const s of symbols) {
           executed.push({
@@ -142,6 +153,43 @@ export async function runDev(profs?: Profile[]): Promise<void> {
           count: rows.length,
         })
       );
+
+      const toDate = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "America/Toronto" })
+      );
+      const hour = toDate.getHours();
+      const minute = toDate.getMinutes();
+      let message = `[From:${process.platform} - Secondary config - FutureInvestorAccount][At:${hour
+        .toString()
+        .padStart(2, "0")}:${minute.toString().padStart(2, "0")}]`;
+
+      if (this.message && this.message.length > 0) {
+        message += "\n" + this.message;
+      }
+
+      console.log(message);
+
+      if (
+        telegramClient &&
+        process.env.APP_ENV === Profile.PROD &&
+        (hour === 8 || hour === 16) &&
+        minute >= 0 &&
+        minute <= 3
+      ) {
+        try {
+          const data = (await axios.get("https://zenquotes.io/api/random"))
+            .data;
+          const quote = data[0]; // Accède au premier élément du tableau
+          message += `\n${quote.q} By ${quote.a}`;
+        } catch (e) {
+          console.log(e);
+        }
+
+        await telegramClient.sendMessage(
+          this.config.telegramGroupOrderId,
+          message
+        );
+      }
     }
   } finally {
     await prisma.$disconnect();
