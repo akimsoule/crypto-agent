@@ -1,8 +1,5 @@
 import { InvestorProfile, PrismaClient } from "@prisma/client";
-import {
-  CustomTelegramBot,
-  SecondaryAccountConfig,
-} from "../../../package/common/Config";
+import { SecondaryAccountConfig } from "../../../package/common/Config";
 import {
   FutureGroup,
   MixHoldSideEnum,
@@ -23,6 +20,8 @@ import {
   mapIndicator,
 } from "../../../package/common/MapperLib";
 import axios from "axios";
+import TelegramBot from "node-telegram-bot-api";
+import { BotParameter } from "../../../package/config/BotParameter";
 
 // Runner dev basé sur la configuration stockée en base
 export async function runDev(profs?: Profile[]): Promise<void> {
@@ -39,10 +38,12 @@ export async function runDev(profs?: Profile[]): Promise<void> {
       return;
     }
 
-    // Accumule les couples (investorId, symbol) exécutés pour batch upsert
     const executed: { profileId: string; symbol: string }[] = [];
 
-    let telegramClient: CustomTelegramBot | undefined = undefined;
+    // On prépare un Runner et on mettra à jour sa config à chaque investisseur
+    let runner: Runner | undefined;
+    let baseConfig: SecondaryAccountConfig | undefined;
+    let telegramClient: TelegramBot | undefined;
 
     for (const inv of investors) {
       const symbols = normalizeSymbols(inv.symbols as string[] | null);
@@ -54,7 +55,7 @@ export async function runDev(profs?: Profile[]): Promise<void> {
       const position = mapPosition(inv.position as string | null);
       const leverage = (inv.leverage as number) || 5;
       const marginMode = mapMarginMode(inv.marginMode as string | null);
-      const exitValue = inv.exit === true ? true : null; // on conserve tri-état (true / null)
+      const exitValue = inv.exit === true ? true : null;
 
       const groups: FutureGroup[] = [
         {
@@ -63,7 +64,6 @@ export async function runDev(profs?: Profile[]): Promise<void> {
           exit: exitValue,
           position: position ?? MixHoldSideEnum.LONG,
           activeLimit: false,
-          // utilisation du filtre mappé
           filter: filterInstance,
           margeLeverage: leverage,
           marginMode,
@@ -97,13 +97,17 @@ export async function runDev(profs?: Profile[]): Promise<void> {
             },
           })
         );
-        const config = new SecondaryAccountConfig(params);
-        if (!telegramClient) {
-          telegramClient = config.telegramClient;
+
+        if (!runner) {
+          baseConfig = new SecondaryAccountConfig(params);
+          runner = new Runner(baseConfig);
+          telegramClient = baseConfig.telegramClient;
+        } else if (baseConfig) {
+          baseConfig.botParameter = new BotParameter(params);
         }
-        const runner = new Runner(config);
+
         await runner.run(inv);
-        // Enregistre les symboles visités
+
         for (const s of symbols) {
           executed.push({
             profileId: inv.id,
@@ -115,16 +119,11 @@ export async function runDev(profs?: Profile[]): Promise<void> {
       }
     }
 
-    // Batch upsert final (dernière date d'exécution)
     if (executed.length && isProdEnv) {
       const now = new Date();
-      // Utilise un Set pour éviter doublons en cas de symboles répétés
       const uniq = new Map<string, { profileId: string; symbol: string }>();
-      for (const e of executed) {
-        uniq.set(e.profileId + "::" + e.symbol, e);
-      }
+      for (const e of executed) uniq.set(e.profileId + "::" + e.symbol, e);
       const rows = Array.from(uniq.values());
-      // Prisma n'a pas de batchUpsert natif: on fait des upserts parallélisés raisonnablement
       const CONC = 10;
       let i = 0;
       while (i < rows.length) {
@@ -159,13 +158,10 @@ export async function runDev(profs?: Profile[]): Promise<void> {
       );
       const hour = toDate.getHours();
       const minute = toDate.getMinutes();
-      let message = `[From:${process.platform} - Secondary config - FutureInvestorAccount][At:${hour
+      const header = `[From:${process.platform} - Secondary config - FutureInvestorAccount][At:${hour
         .toString()
         .padStart(2, "0")}:${minute.toString().padStart(2, "0")}]`;
-
-      if (this.message && this.message.length > 0) {
-        message += "\n" + this.message;
-      }
+      let message = header;
 
       console.log(message);
 
@@ -179,16 +175,14 @@ export async function runDev(profs?: Profile[]): Promise<void> {
         try {
           const data = (await axios.get("https://zenquotes.io/api/random"))
             .data;
-          const quote = data[0]; // Accède au premier élément du tableau
+          const quote = data[0];
           message += `\n${quote.q} By ${quote.a}`;
         } catch (e) {
           console.log(e);
         }
-
-        await telegramClient.sendMessage(
-          this.config.telegramGroupOrderId,
-          message
-        );
+        // baseConfig peut être undefined si aucun investisseur actif, mais ici executed.length > 0 => runner existe
+        const groupId = process.env.TELEGRAM_GROUP_ID as string;
+        await telegramClient.sendMessage(groupId, message);
       }
     }
   } finally {
@@ -198,8 +192,6 @@ export async function runDev(profs?: Profile[]): Promise<void> {
 
 export default runDev;
 
-// Exécution directe (npm run runDev)
-// Note: ESM n'a pas require.main, on détecte via argv
 if (process.argv[1] && /runDev\.(ts|js)$/.test(process.argv[1])) {
   (async () => {
     const start = Date.now();

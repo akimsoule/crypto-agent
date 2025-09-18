@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react'
 import { useInvestors, type Investor } from '../hooks/useInvestors'
 import { useToast } from '../hooks/useToast'
@@ -39,15 +39,58 @@ const getLastTradeInfo = (investments: Investor['investments']): string => {
 // Pagination configurable
 const DEFAULT_PAGE_SIZE = 4;
 export default function InvestorsList() {
-  const { investors, loading, error, getInvestorDetail } = useInvestors()
+  const { investors, loading, error, getInvestorDetail, includeInactive, setIncludeInactive, wantMetrics, setWantMetrics } = useInvestors()
   const { error: showError } = useToast()
   const [selectedInvestor, setSelectedInvestor] = useState<Investor | null>(null)
   const [loadingInvestorId, setLoadingInvestorId] = useState<string | null>(null)
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
-  const totalPages = Math.ceil(investors.length / pageSize)
-  const paginatedInvestors = investors.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const [sortKey, setSortKey] = useState<'avgGain' | 'totalReturn' | 'winRate' | 'topPnL' | 'volatility' | 'stability'>('avgGain');
+  const [minAvgGain, setMinAvgGain] = useState<number>(-Infinity);
+  const [symbolFilter, setSymbolFilter] = useState<string>('');
+  const [multiSymbols, setMultiSymbols] = useState<string>('');
+
+  const parsedMultiSymbols = useMemo(() => multiSymbols.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean), [multiSymbols]);
+
+  // Types internes enrichis
+  interface EnrichedInvestor extends Investor { _avgGain: number; _topPnL: number }
+
+  const enhancedInvestors = useMemo<EnrichedInvestor[]>(() => {
+    return investors.map(inv => {
+      const snaps = inv.portfolioSnapshots || [];
+      const avgGain = snaps.length ? snaps.reduce((acc, s) => acc + (s.totalReturnPercent || 0), 0) / snaps.length : 0;
+      const topPnL = inv.perSymbolUnrealized?.[0]?.unrealized ?? 0;
+      return { ...inv, _avgGain: avgGain, _topPnL: topPnL };
+    });
+  }, [investors]);
+
+  const filteredSortedInvestors = useMemo<EnrichedInvestor[]>(() => {
+    return enhancedInvestors
+      .filter(inv => (minAvgGain === -Infinity ? true : inv._avgGain >= minAvgGain))
+      .filter(inv => (symbolFilter ? (inv.topSymbol === symbolFilter || inv.perSymbolUnrealized?.some((p: {symbol: string}) => p.symbol === symbolFilter) || inv.investments.some((i: {symbol: string})=> i.symbol === symbolFilter)) : true))
+      .filter(inv => (parsedMultiSymbols.length === 0 ? true : parsedMultiSymbols.some(sym =>
+        inv.perSymbolUnrealized?.some((p: {symbol: string})=>p.symbol === sym) || inv.investments.some((i: {symbol: string})=>i.symbol === sym)
+      )))
+      .sort((a,b) => {
+        switch (sortKey) {
+          case 'avgGain': return b._avgGain - a._avgGain;
+          case 'totalReturn': return (b.portfolioSnapshots[0]?.totalReturnPercent || 0) - (a.portfolioSnapshots[0]?.totalReturnPercent || 0);
+          case 'winRate': return (b.portfolioSnapshots[0]?.winRate || 0) - (a.portfolioSnapshots[0]?.winRate || 0);
+          case 'topPnL': return (b._topPnL || 0) - (a._topPnL || 0);
+          case 'volatility': return (a.volatilityProxy || 0) - (b.volatilityProxy || 0);
+          case 'stability': {
+            const av = (a.volatilityProxy ?? 9999) + ((a.unrealizedDispersion ?? 0)/100);
+            const bv = (b.volatilityProxy ?? 9999) + ((b.unrealizedDispersion ?? 0)/100);
+            return av - bv; // plus faible = plus stable
+          }
+          default: return 0;
+        }
+      });
+  }, [enhancedInvestors, sortKey, minAvgGain, symbolFilter, parsedMultiSymbols]);
+
+  const paginatedInvestors = filteredSortedInvestors.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const totalPages = Math.ceil(filteredSortedInvestors.length / pageSize)
 
   const handleViewDetails = async (investorId: string) => {
     try {
@@ -97,9 +140,42 @@ export default function InvestorsList() {
     <div className="space-y-6">
       <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
         <h2 className="text-xl sm:text-2xl font-bold">🤖 Nos Investisseurs IA</h2>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs">Tri</label>
+            <select className="select select-bordered select-xs" value={sortKey} onChange={e => {const v = e.target.value as typeof sortKey; setSortKey(v); setCurrentPage(1);}}>
+              <option value="avgGain">Gain moyen</option>
+              <option value="totalReturn">Perf récente</option>
+              <option value="winRate">Taux réussite</option>
+              <option value="topPnL">Top PnL</option>
+              <option value="volatility">Volatilité (faible)</option>
+              <option value="stability">Stabilité</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs">Gain ≥</label>
+            <input type="number" className="input input-bordered input-xs w-20" placeholder="%" onChange={e => { const v = e.target.value === '' ? -Infinity : Number(e.target.value); setMinAvgGain(v); setCurrentPage(1); }} />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs">Symbole</label>
+            <input type="text" className="input input-bordered input-xs w-24" placeholder="BTCUSDT" value={symbolFilter} onChange={e => { setSymbolFilter(e.target.value.trim().toUpperCase()); setCurrentPage(1); }} />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs">Multi</label>
+            <input type="text" className="input input-bordered input-xs w-32" placeholder="BTC,ETH,SOL" value={multiSymbols} onChange={e => { setMultiSymbols(e.target.value); setCurrentPage(1); }} />
+          </div>
+          <div className="flex items-center gap-1 text-xs">
+            <label className="cursor-pointer flex items-center gap-1">
+              <input type="checkbox" className="checkbox checkbox-xs" checked={includeInactive} onChange={e=> { setIncludeInactive(e.target.checked); setCurrentPage(1); }} />
+              Inactifs
+            </label>
+            <label className="cursor-pointer flex items-center gap-1">
+              <input type="checkbox" className="checkbox checkbox-xs" checked={wantMetrics} onChange={e=> { setWantMetrics(e.target.checked); }} />
+              Metrics
+            </label>
+          </div>
           <div className="badge badge-primary badge-lg self-start sm:self-auto">
-            {investors.length} Actifs
+            {filteredSortedInvestors.length} / {investors.length}
           </div>
           <div className="form-control">
             <label className="label cursor-pointer gap-2">
@@ -109,7 +185,7 @@ export default function InvestorsList() {
                 value={pageSize}
                 onChange={e => {
                   setPageSize(Number(e.target.value));
-                  setCurrentPage(1); // reset page
+                  setCurrentPage(1);
                 }}
               >
                 {[4, 8, 12, 16, 24].map(size => (
@@ -122,14 +198,13 @@ export default function InvestorsList() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-6">
-        {paginatedInvestors.map((investor, index) => {
+        {paginatedInvestors.map((investor: EnrichedInvestor, index) => {
           const latestSnapshot = investor.portfolioSnapshots[0]
           const totalReturn = latestSnapshot?.totalReturnPercent || 0
           const winRate = latestSnapshot?.winRate || 0
           const activePositions = latestSnapshot?.activePositions || 0
-          const currentGain = latestSnapshot?.currentGain ?? 0
           const lastTrade = getLastTradeInfo(investor.investments)
-          const avatar = getInvestorAvatar(investor.type)
+          const avatar = getInvestorAvatar(investor.type || '')
           const globalIndex = (currentPage - 1) * pageSize + index
           return (
             <div key={investor.id} className="card bg-base-100 shadow-lg hover:shadow-xl transition-all">
@@ -159,15 +234,23 @@ export default function InvestorsList() {
                         <TrendingDown className="w-5 h-5 sm:w-6 sm:h-6" />
                       )}
                     </div>
-                    <div className="stat-title text-xs">Gains</div>
-                    <div className={`stat-value text-sm ${
-                      totalReturn >= 0 ? 'text-success' : 'text-error'
-                    }`}>
-                      {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(1)}%
+                    <div className="stat-title text-xs flex items-center gap-1">
+                      Gains (Dernier)
+                      {investor.topSymbol && (
+                        <span className="badge badge-accent badge-xs">TOP {investor.topSymbol}</span>
+                      )}
                     </div>
-                    {Number.isFinite(currentGain) && (
-                      <div className={`stat-desc text-xs ${currentGain >= 0 ? 'text-success' : 'text-error'}`}>
-                        {currentGain >= 0 ? '+' : ''}${currentGain.toLocaleString()}
+                    <div className={`stat-value text-sm ${totalReturn >= 0 ? 'text-success' : 'text-error'}`}>{totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(1)}%</div>
+                    <div className="stat-desc text-[10px] mt-1">
+                      Moy: { investor._avgGain >= 0 ? '+' : ''}{investor._avgGain.toFixed(1)}% {investor.volatilityProxy !== undefined && (
+                        <span className="ml-1 opacity-70">(Vol {investor.volatilityProxy.toFixed(2)}%)</span>
+                      )}{investor.unrealizedDispersion !== undefined && (
+                        <span className="ml-1 opacity-60">σ {investor.unrealizedDispersion.toFixed(2)}</span>
+                      )}
+                    </div>
+                    {investor.perSymbolUnrealized && investor.perSymbolUnrealized.length > 0 && (
+                      <div className="stat-desc text-[10px] mt-1">
+                        Top PnL: {investor.perSymbolUnrealized[0].symbol} {investor.perSymbolUnrealized[0].unrealized >=0 ? '+' : ''}${Math.round(investor.perSymbolUnrealized[0].unrealized).toLocaleString()}
                       </div>
                     )}
                   </div>
@@ -264,7 +347,7 @@ export default function InvestorsList() {
             <>
               {/* Header du modal */}
               <div className="flex flex-wrap sm:flex-nowrap items-start sm:items-center gap-3 sm:gap-4 mb-4">
-                <div className="text-3xl sm:text-4xl leading-none shrink-0">{getInvestorAvatar(selectedInvestor.type)}</div>
+                <div className="text-3xl sm:text-4xl leading-none shrink-0">{getInvestorAvatar(selectedInvestor.type || '')}</div>
                 <div className="min-w-0 flex-1">
                   <h3 className="font-bold text-xl sm:text-2xl leading-tight break-words max-w-full">{selectedInvestor.name}</h3>
                   <div className="flex flex-wrap items-center gap-2 mt-1 text-xs sm:text-sm">
@@ -325,10 +408,17 @@ export default function InvestorsList() {
 
               {/* Activité d'exécution */}
               <div className="mb-6">
-                <h4 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                <h4 className="font-semibold text-lg mb-3 flex flex-col sm:flex-row sm:items-center gap-2">
                   <span>Activité d'exécution</span>
                   {selectedInvestor.lastExecutedAt && (
-                    <span className="badge badge-sm badge-outline">Dernier run: {new Date(selectedInvestor.lastExecutedAt).toLocaleString('fr-FR')}</span>
+                    <span
+                      className="inline-flex items-center badge badge-outline border border-base-300/70 text-xs font-normal px-2 py-1 rounded-md shadow-sm backdrop-blur-sm bg-base-200/40 dark:bg-base-300/30"
+                    >
+                      <span className="opacity-70 mr-1">Dernier run:</span>
+                      <span className="font-mono">
+                        {new Date(selectedInvestor.lastExecutedAt).toLocaleString('fr-FR')}
+                      </span>
+                    </span>
                   )}
                 </h4>
                 {selectedInvestor.lastExecutions && selectedInvestor.lastExecutions.length > 0 ? (

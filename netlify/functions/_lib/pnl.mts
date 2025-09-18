@@ -107,7 +107,10 @@ export async function getPriceMap(
 ): Promise<Map<string, number>> {
   const uniq = Array.from(new Set(bases.map((b) => b.toUpperCase())));
   const result = new Map<string, number>();
-  const candle = getCandle();
+  // Si aucune clé API n'est configurée pour le second compte, on renvoie une map vide
+  // afin d'éviter des erreurs réseau ou throttling inutile côté build / dev.
+  const hasApi = !!process.env.ACCOUNT_API_KEY_SECOND && !!process.env.ACCOUNT_SECRET_KEY_SECOND;
+  const candle = hasApi ? getCandle() : null;
   const ttlMs = Math.max(0, opts?.ttlMs ?? 15_000);
 
   const toFetch: string[] = [];
@@ -122,31 +125,31 @@ export async function getPriceMap(
     }
   }
 
-  await Promise.all(
-    toFetch.map(async (b) => {
-      // IMPORTANT: passer uniquement la base (ex: "ETH");
-      // les providers appendront eux-mêmes le quote si nécessaire (ex: Binance -> ETHUSDT)
-      const symbol = b;
-      try {
-        const candles = await candle.getCandles(
-          symbol,
-          CandlestickIntervalEnum.HOURLY,
-          new Date(),
-          1
-        );
-        if (candles && candles.length) {
-          const last = candles[candles.length - 1];
-          const px = toNum(last.close);
-          if (px > 0) {
-            result.set(b, px);
-            PRICE_CACHE.set(b, { price: px, at: Date.now() });
+  if (hasApi && candle) {
+    await Promise.all(
+      toFetch.map(async (b) => {
+        const symbol = b; // base simple
+        try {
+          const candles = await candle.getCandles(
+            symbol,
+            CandlestickIntervalEnum.HOURLY,
+            new Date(),
+            1
+          );
+          if (candles && candles.length) {
+            const last = candles[candles.length - 1];
+            const px = toNum(last.close);
+            if (px > 0) {
+              result.set(b, px);
+              PRICE_CACHE.set(b, { price: px, at: Date.now() });
+            }
           }
+        } catch {
+          // ignore: absence de prix => on utilisera avg plus tard
         }
-      } catch {
-        // ignore si indisponible (pas de fallback)
-      }
-    })
-  );
+      })
+    );
+  }
 
   return result;
 }

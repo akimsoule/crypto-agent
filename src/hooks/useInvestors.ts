@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 // Types basés sur la réponse du serveur (structure Prisma)
 export interface CryptoInvestment {
@@ -51,45 +51,43 @@ export interface CryptoPortfolioSnapshot {
 export interface Investor {
   id: string;
   name: string;
-  type: string;
-  riskTolerance: number;
-  maxPositionSize: number;
-  holdingPeriod: number;
-  sellThreshold: number;
-  stopLoss: number;
-  sentimentWeight: number;
-  technicalWeight: number;
-  description: string;
-  initialBalance: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  investments: CryptoInvestment[];
+  type?: string;
+  active: boolean; // Note: dans l'API c'est isActive; on peut garder les deux pour compat
+  isActive?: boolean;
   portfolioSnapshots: CryptoPortfolioSnapshot[];
-  lastExecutions?: { symbol: string; lastExecutedAt: string }[];
+  investments: CryptoInvestment[];
+  perSymbolUnrealized?: Array<{ symbol: string; unrealized: number }>;
+  topSymbol?: string;
+  volatilityProxy?: number; // ratio PnL / initialBalance
+  unrealizedDispersion?: number; // std dev des PnL par symbole
+  lastExecutions?: Array<{ symbol: string; lastExecutedAt: string }>;
   lastExecutedAt?: string | null;
-  openPositions?: Array<{
-    base: string;
-    symbol: string;
-    side: 'long' | 'short';
-    qty: number;
-    avg: number;
-    price: number;
-    unrealized: number;
-  }>;
+  // champs calculés côté client (ajoutés dans InvestorsList)
+  _avgGain?: number;
+  _topPnL?: number;
 }
 
 export function useInvestors() {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [wantMetrics, setWantMetrics] = useState(true);
+
+  const buildUrl = useCallback(() => {
+    const params = new URLSearchParams();
+    if (includeInactive) params.set('includeInactive', '1');
+    if (wantMetrics) params.set('metrics', '1');
+    const qs = params.toString();
+    return qs ? `/api/investors?${qs}` : '/api/investors';
+  }, [includeInactive, wantMetrics]);
 
   // Fonction pour charger les investisseurs
-  const fetchInvestors = async () => {
+  const fetchInvestors = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/investors');
+      const response = await fetch(buildUrl());
       if (!response.ok) throw new Error('Erreur lors du chargement des investisseurs');
       const data: {success : boolean, data: Investor[]} = await response.json();
       setInvestors(data.data);
@@ -98,11 +96,9 @@ export function useInvestors() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildUrl]);
 
-  useEffect(() => {
-    fetchInvestors();
-  }, []);
+  useEffect(() => { fetchInvestors(); }, [fetchInvestors]);
 
   const getInvestorDetail = async (id: string, options?: { side?: 'long' | 'short' }): Promise<{ success: boolean; data?: Investor; error?: string }> => {
     try {
@@ -124,5 +120,5 @@ export function useInvestors() {
   };
 
   // Ajout de la fonction refetch pour recharger les investisseurs
-  return { investors, loading, error, getInvestorDetail, refetch: fetchInvestors };
+  return { investors, loading, error, getInvestorDetail, refetch: fetchInvestors, includeInactive, setIncludeInactive, wantMetrics, setWantMetrics };
 }
