@@ -7,6 +7,7 @@ import {
   buildPositionsDetail,
   toNum,
 } from "./_lib/pnl.mts";
+import type { OrderLite } from "./_lib/pnl.mts";
 
 
 export default endpoint({
@@ -53,11 +54,15 @@ export default endpoint({
       return json({ success: false, error: "Investor introuvable" }, 404);
 
     // Reconstruire les positions ouvertes à partir des ORDERS (lissage) et calculer via mark price
-    const allBaseSymbols = Array.from(
-      new Set((profile?.Order ?? []).map((o) => baseFromSymbol(o.symbol)))
+    const allBaseSymbols: string[] = Array.from(
+      new Set(
+        (profile?.Order ?? []).map((o: { symbol: string }) =>
+          baseFromSymbol(o.symbol)
+        )
+      )
     );
     const priceMap = await getPriceMap(allBaseSymbols, { ttlMs: 15_000 });
-    const states = reconstructStates((profile?.Order ?? []) as any, {
+    const states = reconstructStates((profile?.Order ?? []) as unknown as OrderLite[], {
       onlySide,
     });
     const { totalUnrealized, activePositions } = computeUnrealized(
@@ -98,7 +103,7 @@ export default endpoint({
     };
 
     // Adaptation des snapshots historiques si des métriques sont présentes
-    const historical = profile.snapshots.map((s) => {
+    const historical = profile.snapshots.map((s: { createdAt: Date; metrics?: unknown | null }) => {
       const metrics = (s.metrics as any) || {};
       return {
         id: 1, // placeholder uniforme (le front n'utilise peut-être pas encore l'id réel)
@@ -124,7 +129,7 @@ export default endpoint({
     // Investments : on dérive des Orders récentes (structure minimaliste)
     const investments = profile.Order.slice(-20)
       .reverse()
-      .map((o) => ({
+      .map((o: { orderId: string; symbol: string; createdAt: Date }) => ({
         id: o.orderId,
         investorId: profile.id,
         coinId: o.symbol,
@@ -146,7 +151,7 @@ export default endpoint({
 
     // Enrichir positions / investments avec lastExecutedAt si disponible
     const positionsWithExec: any[] = [];
-    const investmentsWithExec = investments.map((i) => ({
+    const investmentsWithExec = investments.map((i: { symbol: string }) => ({
       ...i,
       lastExecutedAt: execMap.get(i.symbol) || null,
     }));

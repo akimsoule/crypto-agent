@@ -83,12 +83,15 @@ const FINANCIAL_PROFILES: Record<string, { initial: number; maxPos: number; risk
 
 // Catégories crypto avec symboles associés
 const CRYPTO_CATEGORIES: Record<string, string[]> = {
-  payment: ["BTCUSDT", "LTCUSDT", "BCHUSDT"],
-  utility: ["ETHUSDT", "BNBUSDT", "SOLUSDT"],
-  governance: ["UNIUSDT", "AAVEUSDT", "MKRUSDT"],
-  enterprise: ["XRPUSDT", "XLMUSDT"],
-  defi: ["UNIUSDT", "AAVEUSDT", "CRVUSDT", "COMPUSDT"],
-  ai: ["RNDRUSDT", "FETUSDT", "GRTUSDT", "INJUSDT"],
+  payment: ["BTCUSDT", "LTCUSDT", "BCHUSDT", "DOGEUSDT", "XRPUSDT", "ADAUSDT"],
+  utility: ["ETHUSDT", "BNBUSDT", "SOLUSDT", "DOTUSDT", "MATICUSDT", "AVAXUSDT"],
+  governance: ["UNIUSDT", "AAVEUSDT", "MKRUSDT", "SUSHIUSDT", "SNXUSDT", "CRVUSDT"],
+  enterprise: ["XRPUSDT", "XLMUSDT", "HBARUSDT", "MITHUSDT", "QTUMUSDT"],
+  defi: ["UNIUSDT", "AAVEUSDT", "CRVUSDT", "COMPUSDT", "BALUSDT", "YFIUSDT"],
+  ai: ["RNDRUSDT", "FETUSDT", "GRTUSDT", "INJUSDT", "OCEANUSDT", "AGIXUSDT"],
+  gaming: ["ENJUSDT", "SANDUSDT", "AXSUSDT", "MANAUSDT", "GALAUSDT", "ALICEUSDT"],
+  nft: ["FLOWUSDT", "OPUSDT", "RARIUSDT", "SANDUSDT", "LOKAUSDT"],
+  privacy: ["XMRUSDT", "ZECUSDT", "DASHUSDT", "GRINUSDT", "SCRTUSDT"],
 };
 
 // Règles financières par catégorie
@@ -99,6 +102,9 @@ const CATEGORY_FINANCIAL_RULES: Record<string, { initial: number; maxPos: number
   enterprise: { initial: 7500, maxPos: 450, risk: 0.015, leverage: 4 },
   defi: { initial: 8500, maxPos: 550, risk: 0.02, leverage: 5 },
   ai: { initial: 9000, maxPos: 600, risk: 0.022, leverage: 6 },
+  gaming: { initial: 7000, maxPos: 500, risk: 0.025, leverage: 4 },
+  nft: { initial: 6000, maxPos: 400, risk: 0.028, leverage: 3 },
+  privacy: { initial: 8000, maxPos: 550, risk: 0.02, leverage: 5 },
 };
 
 /**

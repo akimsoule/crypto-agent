@@ -35,7 +35,8 @@ export const useDatabaseSeed = () => {
       if (force) params.append('force', 'true');
       if (resetData) params.append('reset', 'true');
 
-      const url = `/.netlify/functions/seed-database${params.toString() ? `?${params.toString()}` : ''}`;
+      const queryString = params.toString();
+      const url = `/.netlify/functions/seed-database${queryString ? '?' + queryString : ''}`;
       
       const response = await fetch(url, {
         method: 'POST',

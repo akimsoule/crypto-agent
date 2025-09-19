@@ -4,8 +4,59 @@ import {
   computeUnrealized,
   getPriceMap,
   reconstructStates,
-  toNum,
+  
 } from "./_lib/pnl.mts";
+import type { State, OrderLite } from "./_lib/pnl.mts";
+
+// Types Prisma dérivés pour typer précisément la réponse et éviter les any implicites
+// Types locaux minimaux pour limiter la dépendance aux types Prisma générés
+type OrderLiteSelect = {
+  orderId: string;
+  symbol: string;
+  createdAt: Date;
+  baseVolume: unknown;
+  priceAvg: unknown;
+  side?: string | null;
+  posSide?: string | null;
+};
+type ProfileWithOrders = {
+  id: string;
+  name: string;
+  type: string;
+  initialBalance: number | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  riskTolerance: number | null;
+  maxPositionSize: number | null;
+  strategyName: string;
+  Order: OrderLiteSelect[];
+};
+
+// Helpers pour réduire la complexité cognitive et clarifier les métriques
+function calcPerSymbolUnrealized(
+  states: Map<string, State>,
+  priceMap: Map<string, number>,
+  onlySide?: "long" | "short"
+): { symbol: string; unrealized: number }[] {
+  const arr: { symbol: string; unrealized: number }[] = [];
+  for (const st of states.values()) {
+    if (st.qty <= 0 || st.avg <= 0) continue;
+    if (onlySide && st.side !== onlySide) continue;
+    const px = priceMap.get(st.base) ?? st.avg;
+    const unrealized = st.side === "long" ? (px - st.avg) * st.qty : (st.avg - px) * st.qty;
+    arr.push({ symbol: `${st.base}USDT`, unrealized });
+  }
+  arr.sort((a, b) => b.unrealized - a.unrealized);
+  return arr;
+}
+
+function calcUnrealizedDispersion(values: number[]): number {
+  if (!values || values.length <= 1) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
 
 export default endpoint({
   methods: ["GET"],
@@ -20,7 +71,7 @@ export default endpoint({
     const includeInactive = url.searchParams.get("includeInactive") === "1";
     const metrics = url.searchParams.get("metrics") === "1";
 
-    const profiles = await prisma.investorProfile.findMany({
+    const profiles: ProfileWithOrders[] = await prisma.investorProfile.findMany({
       where: includeInactive ? {} : { isActive: true },
       orderBy: { createdAt: "asc" },
       include: {
@@ -40,10 +91,10 @@ export default endpoint({
       },
     });
 
-    const allBaseSymbols = Array.from(
+    const allBaseSymbols: string[] = Array.from(
       new Set(
-        profiles.flatMap((p) =>
-          (p.Order ?? []).map((o) => baseFromSymbol(o.symbol))
+        profiles.flatMap((p: ProfileWithOrders) =>
+          (p.Order ?? []).map((o: OrderLiteSelect) => baseFromSymbol(o.symbol))
         )
       )
     );
@@ -55,9 +106,9 @@ export default endpoint({
       console.warn('[investors] getPriceMap failed', (e as Error).message);
     }
 
-    return profiles.map((p) => {
+    return profiles.map((p: ProfileWithOrders) => {
       const initialBalance = p.initialBalance ?? 0;
-      const states = reconstructStates((p.Order ?? []) as any, { onlySide });
+      const states = reconstructStates((p.Order ?? []) as unknown as OrderLite[], { onlySide });
       let totalUnrealized = 0;
       let activePositions = 0;
       try {
@@ -68,47 +119,33 @@ export default endpoint({
         console.warn('[investors] computeUnrealized error', (e as Error).message);
       }
 
-      // Calcul détaillé per symbol latent (unrealized)
-      let perSymbolUnrealized: { symbol: string; unrealized: number }[] = [];
+      // Calcul détaillé per symbol latent (unrealized) + métriques optionnelles
+      let metricsObj: Record<string, unknown> = {};
       if (metrics) {
         try {
-          for (const st of states.values()) {
-            if (st.qty <= 0 || st.avg <= 0) continue;
-            if (onlySide && st.side !== onlySide) continue;
-            const px = priceMap.get(st.base) ?? st.avg;
-            const unrealized =
-              st.side === "long"
-                ? (px - st.avg) * st.qty
-                : (st.avg - px) * st.qty;
-            perSymbolUnrealized.push({ symbol: `${st.base}USDT`, unrealized });
-          }
-          perSymbolUnrealized.sort((a, b) => b.unrealized - a.unrealized);
+          const perSymbolUnrealized = calcPerSymbolUnrealized(
+            states,
+            priceMap,
+            onlySide
+          );
+          const topSymbol: string | null = perSymbolUnrealized[0]?.symbol ?? null;
+          const volatilityProxy =
+            initialBalance > 0
+              ? Math.abs(totalUnrealized / initialBalance) * 100
+              : undefined;
+          const unrealizedDispersion = calcUnrealizedDispersion(
+            perSymbolUnrealized.map((x) => x.unrealized)
+          );
+          metricsObj = {
+            perSymbolUnrealized,
+            topSymbol,
+            volatilityProxy,
+            unrealizedDispersion,
+          };
         } catch (e) {
           console.warn('[investors] perSymbol calc error', (e as Error).message);
         }
       }
-      const topSymbol = metrics
-        ? perSymbolUnrealized[0]?.symbol || null
-        : undefined;
-      const volatilityProxy =
-        metrics && initialBalance > 0
-          ? Math.abs(totalUnrealized / initialBalance) * 100
-          : undefined;
-      const unrealizedDispersion =
-        metrics && perSymbolUnrealized.length > 1
-          ? (() => {
-              const vals = perSymbolUnrealized.map((p) => p.unrealized);
-              const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
-              const variance =
-                vals.reduce(
-                  (acc, v) => acc + Math.pow(v - mean, 2),
-                  0
-                ) / (vals.length - 1);
-              return Math.sqrt(variance);
-            })()
-          : metrics
-          ? 0
-          : undefined;
 
       const totalValue = initialBalance + totalUnrealized;
       const totalReturn = totalValue - initialBalance;
@@ -118,7 +155,7 @@ export default endpoint({
       const investments = (p.Order ?? [])
         .slice(-10)
         .reverse()
-        .map((o) => ({
+        .map((o: OrderLiteSelect) => ({
           id: o.orderId,
           investorId: p.id,
           coinId: o.symbol,
@@ -164,14 +201,7 @@ export default endpoint({
         updatedAt: p.updatedAt,
         investments,
         portfolioSnapshots: [snapshotNow],
-        ...(metrics
-          ? {
-              perSymbolUnrealized,
-              topSymbol,
-              volatilityProxy,
-              unrealizedDispersion,
-            }
-          : {}),
+        ...metricsObj,
       };
     });
   },

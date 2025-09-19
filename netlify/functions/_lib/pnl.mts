@@ -41,50 +41,66 @@ export function toNum(v: unknown, def = 0): number {
   return Number.isFinite(n) ? n : def;
 }
 
+// Alias pour limiter la complexité des unions répétées
+export type OnlySide = "long" | "short" | MixHoldSideEnum;
+
+function wantSide(onlySide?: OnlySide): "long" | "short" | undefined {
+  if (!onlySide) return undefined;
+  const s = (typeof onlySide === "string" ? onlySide : String(onlySide)).toLowerCase();
+  return s === "long" || s === "short" ? (s as "long" | "short") : undefined;
+}
+
+type ParsedOrder = {
+  base: string;
+  pos: "long" | "short";
+  side: "buy" | "sell";
+  qty: number;
+  price: number;
+};
+
+function parseOrder(o: OrderLite): ParsedOrder | null {
+  const base = baseFromSymbol(o.symbol);
+  const posRaw = String(o.posSide || "").toLowerCase();
+  const sideRaw = String(o.side || "").toLowerCase();
+  const pos = posRaw === "long" || posRaw === "short" ? (posRaw as "long" | "short") : null;
+  const side = sideRaw === "buy" || sideRaw === "sell" ? (sideRaw as "buy" | "sell") : null;
+  const qty = toNum(o.baseVolume);
+  const price = toNum(o.priceAvg);
+  if (!pos || !side) return null;
+  if (qty <= 0 || price <= 0) return null;
+  return { base, pos, side, qty, price };
+}
+
+function applyTrade(st: State, ord: ParsedOrder): void {
+  const { pos, side, qty, price } = ord;
+  const isIncrease = (pos === "long" && side === "buy") || (pos === "short" && side === "sell");
+  if (isIncrease) {
+    const newQty = st.qty + qty;
+    st.avg = st.qty > 0 ? (st.avg * st.qty + price * qty) / newQty : price;
+    st.qty = newQty;
+    return;
+  }
+  // decrease position size
+  st.qty = Math.max(0, st.qty - qty);
+  if (st.qty === 0) st.avg = 0;
+}
+
 export function reconstructStates(
   orders: OrderLite[],
-  opts?: { onlySide?: "long" | "short" | MixHoldSideEnum }
+  opts?: { onlySide?: OnlySide }
 ): Map<string, State> {
   const states = new Map<string, State>(); // key = base:side
   const asc = orders
     .slice()
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const want = wantSide(opts?.onlySide);
   for (const o of asc) {
-    const base = baseFromSymbol(o.symbol);
-    const pos = String(o.posSide || "").toLowerCase() as "long" | "short";
-    if (opts?.onlySide) {
-      const want =
-        typeof opts.onlySide === "string"
-          ? opts.onlySide.toLowerCase()
-          : String(opts.onlySide).toLowerCase();
-      if (pos !== (want as "long" | "short")) continue;
-    }
-    const side = String(o.side || "").toLowerCase();
-    if (pos !== "long" && pos !== "short") continue;
-    const qty = toNum(o.baseVolume);
-    const price = toNum(o.priceAvg);
-    if (qty <= 0 || price <= 0) continue;
-    const key = `${base}:${pos}`;
-    const st = states.get(key) ?? { qty: 0, avg: 0, base, side: pos };
-    if (pos === "long") {
-      if (side === "buy") {
-        const newQty = st.qty + qty;
-        st.avg = st.qty > 0 ? (st.avg * st.qty + price * qty) / newQty : price;
-        st.qty = newQty;
-      } else if (side === "sell") {
-        st.qty = Math.max(0, st.qty - qty);
-        if (st.qty === 0) st.avg = 0;
-      }
-    } else if (pos === "short") {
-      if (side === "sell") {
-        const newQty = st.qty + qty;
-        st.avg = st.qty > 0 ? (st.avg * st.qty + price * qty) / newQty : price;
-        st.qty = newQty;
-      } else if (side === "buy") {
-        st.qty = Math.max(0, st.qty - qty);
-        if (st.qty === 0) st.avg = 0;
-      }
-    }
+    const parsed = parseOrder(o);
+    if (!parsed) continue;
+    if (want && parsed.pos !== want) continue;
+    const key = `${parsed.base}:${parsed.pos}`;
+    const st = states.get(key) ?? { qty: 0, avg: 0, base: parsed.base, side: parsed.pos };
+    applyTrade(st, parsed);
     states.set(key, st);
   }
   return states;
@@ -157,7 +173,7 @@ export async function getPriceMap(
 export function computeUnrealized(
   states: Map<string, State>,
   priceMap: Map<string, number>,
-  opts?: { onlySide?: "long" | "short" | MixHoldSideEnum }
+  opts?: { onlySide?: OnlySide }
 ): {
   totalUnrealized: number;
   activePositions: number;
@@ -185,7 +201,7 @@ export function computeUnrealized(
 export function buildPositionsDetail(
   states: Map<string, State>,
   priceMap: Map<string, number>,
-  opts?: { onlySide?: "long" | "short" | MixHoldSideEnum }
+  opts?: { onlySide?: OnlySide }
 ): PositionDetail[] {
   const details: PositionDetail[] = [];
   for (const st of states.values()) {
