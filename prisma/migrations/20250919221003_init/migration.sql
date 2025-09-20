@@ -1,6 +1,3 @@
--- CreateEnum
-CREATE TYPE "public"."SnapshotType" AS ENUM ('HOURLY', 'DAILY', 'MANUAL', 'ROLLUP');
-
 -- CreateTable
 CREATE TABLE "public"."InvestorProfile" (
     "id" TEXT NOT NULL,
@@ -78,73 +75,6 @@ CREATE TABLE "public"."FacebookToken" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."CryptoGemProject" (
-    "id" TEXT NOT NULL,
-    "coinId" TEXT NOT NULL,
-    "symbol" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "currentPrice" DOUBLE PRECISION NOT NULL,
-    "marketCap" DOUBLE PRECISION,
-    "marketCapRank" INTEGER,
-    "priceChangePercentage24h" DOUBLE PRECISION,
-    "volume24h" DOUBLE PRECISION,
-    "totalVolume" DOUBLE PRECISION,
-    "circulatingSupply" DOUBLE PRECISION,
-    "maxSupply" DOUBLE PRECISION,
-    "ath" DOUBLE PRECISION,
-    "athChangePercentage" DOUBLE PRECISION,
-    "gemScore" DOUBLE PRECISION,
-    "sentimentScore" DOUBLE PRECISION,
-    "sentimentMentions" INTEGER,
-    "sentimentPositiveRatio" DOUBLE PRECISION,
-    "needsSentimentAnalysis" BOOLEAN NOT NULL DEFAULT false,
-    "lastUpdated" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "CryptoGemProject_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "public"."CryptoGemState" (
-    "id" TEXT NOT NULL,
-    "runCount" INTEGER NOT NULL DEFAULT 0,
-    "lastRunAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "CryptoGemState_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "public"."CryptoGemAlert" (
-    "id" TEXT NOT NULL,
-    "projectId" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "message" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "CryptoGemAlert_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "public"."Snapshot" (
-    "id" TEXT NOT NULL,
-    "profileId" TEXT,
-    "type" "public"."SnapshotType" NOT NULL DEFAULT 'MANUAL',
-    "rangeStart" TIMESTAMP(3),
-    "rangeEnd" TIMESTAMP(3),
-    "orders" JSONB,
-    "positions" JSONB,
-    "metrics" JSONB,
-    "totalOrders" INTEGER,
-    "totalPositions" INTEGER,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "Snapshot_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "public"."NewsletterSubscription" (
     "id" SERIAL NOT NULL,
     "email" TEXT NOT NULL,
@@ -171,14 +101,12 @@ CREATE TABLE "public"."NewsletterSendLog" (
 );
 
 -- CreateTable
-CREATE TABLE "public"."FacebookPostLog" (
-    "id" SERIAL NOT NULL,
-    "type" TEXT NOT NULL,
-    "message" TEXT,
-    "duplicateHash" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE "public"."InvestorSymbolExecution" (
+    "profileId" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "lastExecutedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "FacebookPostLog_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "InvestorSymbolExecution_pkey" PRIMARY KEY ("profileId","symbol")
 );
 
 -- CreateIndex
@@ -209,30 +137,6 @@ CREATE INDEX "Position_marginCoin_holdSide_idx" ON "public"."Position"("marginCo
 CREATE UNIQUE INDEX "Position_profileId_symbol_holdSide_key" ON "public"."Position"("profileId", "symbol", "holdSide");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "CryptoGemProject_coinId_key" ON "public"."CryptoGemProject"("coinId");
-
--- CreateIndex
-CREATE INDEX "CryptoGemProject_gemScore_idx" ON "public"."CryptoGemProject"("gemScore");
-
--- CreateIndex
-CREATE INDEX "CryptoGemProject_needsSentimentAnalysis_gemScore_idx" ON "public"."CryptoGemProject"("needsSentimentAnalysis", "gemScore");
-
--- CreateIndex
-CREATE INDEX "CryptoGemProject_lastUpdated_idx" ON "public"."CryptoGemProject"("lastUpdated");
-
--- CreateIndex
-CREATE INDEX "CryptoGemAlert_projectId_type_idx" ON "public"."CryptoGemAlert"("projectId", "type");
-
--- CreateIndex
-CREATE INDEX "Snapshot_profileId_createdAt_idx" ON "public"."Snapshot"("profileId", "createdAt");
-
--- CreateIndex
-CREATE INDEX "Snapshot_type_createdAt_idx" ON "public"."Snapshot"("type", "createdAt");
-
--- CreateIndex
-CREATE INDEX "Snapshot_createdAt_idx" ON "public"."Snapshot"("createdAt");
-
--- CreateIndex
 CREATE UNIQUE INDEX "NewsletterSubscription_email_key" ON "public"."NewsletterSubscription"("email");
 
 -- CreateIndex
@@ -245,13 +149,10 @@ CREATE INDEX "NewsletterSendLog_sentAt_idx" ON "public"."NewsletterSendLog"("sen
 CREATE INDEX "NewsletterSendLog_status_idx" ON "public"."NewsletterSendLog"("status");
 
 -- CreateIndex
-CREATE INDEX "FacebookPostLog_createdAt_idx" ON "public"."FacebookPostLog"("createdAt");
+CREATE INDEX "InvestorSymbolExecution_lastExecutedAt_idx" ON "public"."InvestorSymbolExecution"("lastExecutedAt");
 
 -- CreateIndex
-CREATE INDEX "FacebookPostLog_type_createdAt_idx" ON "public"."FacebookPostLog"("type", "createdAt");
-
--- CreateIndex
-CREATE INDEX "FacebookPostLog_duplicateHash_idx" ON "public"."FacebookPostLog"("duplicateHash");
+CREATE INDEX "InvestorSymbolExecution_symbol_lastExecutedAt_idx" ON "public"."InvestorSymbolExecution"("symbol", "lastExecutedAt");
 
 -- AddForeignKey
 ALTER TABLE "public"."Order" ADD CONSTRAINT "Order_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -260,10 +161,7 @@ ALTER TABLE "public"."Order" ADD CONSTRAINT "Order_profileId_fkey" FOREIGN KEY (
 ALTER TABLE "public"."Position" ADD CONSTRAINT "Position_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."CryptoGemAlert" ADD CONSTRAINT "CryptoGemAlert_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "public"."CryptoGemProject"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Snapshot" ADD CONSTRAINT "Snapshot_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "public"."NewsletterSendLog" ADD CONSTRAINT "NewsletterSendLog_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "public"."NewsletterSubscription"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."InvestorSymbolExecution" ADD CONSTRAINT "InvestorSymbolExecution_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;

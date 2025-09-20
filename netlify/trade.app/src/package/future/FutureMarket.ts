@@ -160,8 +160,17 @@ class FutureMarket extends FutureCommon implements Market {
       }
       return true;
     } catch (error) {
-      if (["40757", "22002"].includes(error.body?.code)) {
-        return true;
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "body" in error &&
+        typeof (error as any).body === "object" &&
+        (error as any).body !== null &&
+        "code" in (error as any).body
+      ) {
+        if (["40757", "22002"].includes((error as any).body?.code)) {
+          return true;
+        }
       }
       const message =
         "Exception while exit for " +

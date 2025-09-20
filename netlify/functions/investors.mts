@@ -4,6 +4,7 @@ import {
   computeUnrealized,
   getPriceMap,
   reconstructStates,
+  toNum,
   
 } from "./_lib/pnl.mts";
 import type { State, OrderLite } from "./_lib/pnl.mts";
@@ -23,12 +24,12 @@ type ProfileWithOrders = {
   id: string;
   name: string;
   type: string;
-  initialBalance: number | null;
+  initialBalance: unknown | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  riskTolerance: number | null;
-  maxPositionSize: number | null;
+  riskTolerance: unknown | null;
+  maxPositionSize: unknown | null;
   strategyName: string;
   Order: OrderLiteSelect[];
 };
@@ -91,6 +92,23 @@ export default endpoint({
       },
     });
 
+    // Charger les dernières exécutions pour ces profils (sans recalcul)
+    const profileIds = profiles.map((p) => p.id);
+    const execRows = profileIds.length
+      ? await prisma.investorSymbolExecution.findMany({
+          where: { profileId: { in: profileIds } },
+        })
+      : [];
+    const execByProfile = new Map<string, { lastExecutions: Array<{ symbol: string; lastExecutedAt: string }>; lastExecutedAt: string | null }>();
+    for (const pid of profileIds) execByProfile.set(pid, { lastExecutions: [], lastExecutedAt: null });
+    for (const r of execRows) {
+      const item = execByProfile.get(r.profileId);
+      if (!item) continue;
+      const iso = r.lastExecutedAt.toISOString();
+      item.lastExecutions.push({ symbol: r.symbol, lastExecutedAt: iso });
+      if (!item.lastExecutedAt || iso > item.lastExecutedAt) item.lastExecutedAt = iso;
+    }
+
     const allBaseSymbols: string[] = Array.from(
       new Set(
         profiles.flatMap((p: ProfileWithOrders) =>
@@ -107,7 +125,7 @@ export default endpoint({
     }
 
     return profiles.map((p: ProfileWithOrders) => {
-      const initialBalance = p.initialBalance ?? 0;
+      const initialBalance = toNum(p.initialBalance);
       const states = reconstructStates((p.Order ?? []) as unknown as OrderLite[], { onlySide });
       let totalUnrealized = 0;
       let activePositions = 0;
@@ -183,12 +201,14 @@ export default endpoint({
         positions: [],
       };
 
+      const execInfo = execByProfile.get(p.id) || { lastExecutions: [], lastExecutedAt: null };
       return {
         id: p.id,
         name: p.name,
         type: p.type,
-        riskTolerance: p.riskTolerance ?? 0,
-        maxPositionSize: p.maxPositionSize ?? 0,
+        active: p.isActive,
+        riskTolerance: toNum(p.riskTolerance ?? 0),
+        maxPositionSize: toNum(p.maxPositionSize ?? 0),
         holdingPeriod: 0,
         sellThreshold: 0,
         stopLoss: 0,
@@ -201,6 +221,8 @@ export default endpoint({
         updatedAt: p.updatedAt,
         investments,
         portfolioSnapshots: [snapshotNow],
+        lastExecutions: execInfo.lastExecutions,
+        lastExecutedAt: execInfo.lastExecutedAt,
         ...metricsObj,
       };
     });

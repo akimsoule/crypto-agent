@@ -5,6 +5,7 @@ import {
   reconstructStates,
   computeUnrealized,
   buildPositionsDetail,
+  toNum,
 } from "./_lib/pnl.mts";
 
 // Types locaux minimaux pour limiter la dépendance aux types Prisma générés
@@ -21,12 +22,12 @@ type ProfileWithOrders = {
   id: string;
   name: string;
   type: string;
-  initialBalance: number | null;
+  initialBalance: unknown | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  riskTolerance: number | null;
-  maxPositionSize: number | null;
+  riskTolerance: unknown | null;
+  maxPositionSize: unknown | null;
   strategyName: string;
   Order: OrderLiteSelect[];
 };
@@ -92,7 +93,7 @@ export default endpoint({
 
       // Taux de gain par temps
       const { totalUnrealized } = computeUnrealized(states, priceMap, { onlySide });
-      const initialBalance = p.initialBalance ?? 0;
+  const initialBalance = toNum(p.initialBalance ?? 0);
       const totalValue = initialBalance + totalUnrealized;
       const totalReturn = totalValue - initialBalance;
       const totalReturnPercent = initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;

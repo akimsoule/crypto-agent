@@ -13,31 +13,35 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum HoldSide {
+  long
+  short
+}
+
 model InvestorProfile {
-  id              String     @id @default(cuid())
-  type            String     @default("generic")
-  name            String     @unique
-  symbols         String[]
-  strategyName    String     @map("strategy_name")
-  filter          String
-  period          String
-  position        String?
-  leverage        Int
-  marginMode      String
-  exit            Boolean?
-  isActive        Boolean    @default(true)
-  initialBalance  Float      @default(10000)
-  maxPositionSize Float      @default(0)
-  riskTolerance   Float      @default(0.0) // 0-1 (ex: 0.02 = 2% risque)
+  id                       String                    @id @default(cuid())
+  type                     String                    @default("generic")
+  name                     String                    @unique
+  symbols                  String[]
+  strategyName             String                    @map("strategy_name")
+  filter                   String
+  period                   String
+  position                 String?
+  leverage                 Int
+  marginMode               String
+  exit                     Boolean?
+  isActive                 Boolean                   @default(true)
+  initialBalance           Decimal                   @default(10000)
+  maxPositionSize          Decimal                   @default(0)
+  riskTolerance            Decimal                   @default(0) // 0-1 (ex: 0.02 = 2% risque)
   // Plage indicative de tolérance au risque (issue des presets): 0-1
-  riskMin         Float?
-  riskMax         Float?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  Order           Order[]
-  Position        Position[]
-  snapshots       Snapshot[]
+  riskMin                  Decimal?
+  riskMax                  Decimal?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  Order                    Order[]
   investorSymbolExecutions InvestorSymbolExecution[]
+  closedPositions          ClosedPosition[]
 
   @@index([isActive, strategyName])
 }
@@ -47,12 +51,12 @@ model Order {
   profileId   String
   profile     InvestorProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   symbol      String
-  size        String
+  size        Decimal         @default(0)
   clientOid   String
-  baseVolume  String
-  fee         String?         @default("0") // Conservé pour utilisation future (frais agrégés ou unitaires)
-  priceAvg    String
-  quoteVolume String
+  baseVolume  Decimal         @default(0)
+  fee         Decimal         @default(0) // Conservé pour utilisation future (frais agrégés ou unitaires)
+  priceAvg    Decimal         @default(0)
+  quoteVolume Decimal         @default(0)
   side        String
   posSide     String
   rawPayload  Json? // Données brutes éventuelles (extension future sans altérer le schéma)
@@ -66,167 +70,87 @@ model Order {
   @@index([profileId, symbol, createdAt])
 }
 
-model Position {
-  id           String          @id @default(cuid())
-  profileId    String
-  profile      InvestorProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  marginCoin   String
-  symbol       String
-  holdSide     String
-  marginSize   String
-  available    String
-  locked       String
-  openPriceAvg String
-  marginMode   String
-  unrealizedPL String
-  markPrice    String
-  leverage     String
-  rawPayload   Json? // Snapshot brut de la position si besoin
-  createdAt    DateTime        @default(now()) @map("cTime")
-  updatedAt    DateTime        @updatedAt @map("uTime")
-
-  @@unique([profileId, symbol, holdSide])
-  @@index([symbol])
-  @@index([marginCoin, holdSide])
-}
-
 model FacebookToken {
   id        Int      @id @default(autoincrement())
   token     String
   createdAt DateTime @default(now())
 }
 
-model CryptoGemProject {
-  id                       String   @id @default(cuid())
-  coinId                   String   @unique // id externe (ex: coingecko)
-  symbol                   String
-  name                     String
-  currentPrice             Float
-  marketCap                Float?
-  marketCapRank            Int?
-  priceChangePercentage24h Float?
-  volume24h                Float?
-  totalVolume              Float?
-  circulatingSupply        Float?
-  maxSupply                Float?
-  ath                      Float?
-  athChangePercentage      Float?
-  gemScore                 Float?
-  sentimentScore           Float?
-  sentimentMentions        Int?
-  sentimentPositiveRatio   Float?
-  needsSentimentAnalysis   Boolean  @default(false)
-  lastUpdated              DateTime @default(now())
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-
-  alerts CryptoGemAlert[]
-
-  @@index([gemScore])
-  @@index([needsSentimentAnalysis, gemScore])
-  @@index([lastUpdated])
-}
-
-/// État global / paramètres du chasseur de gems (si besoin d’en stocker un)
-model CryptoGemState {
-  id        String   @id @default(cuid())
-  runCount  Int      @default(0)
-  lastRunAt DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-/// Alertes (ex: score élevé, franchissement de seuil)
-model CryptoGemAlert {
-  id        String           @id @default(cuid())
-  projectId String
-  project   CryptoGemProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type      String
-  message   String
-  createdAt DateTime         @default(now())
-
-  @@index([projectId, type])
-}
-
-/// Types de snapshot pour rétention / agrégation
-enum SnapshotType {
-  HOURLY
-  DAILY
-  MANUAL
-  ROLLUP
-}
-
-/// Snapshot périodique des orders/positions avant purge
-model Snapshot {
-  id             String           @id @default(cuid())
-  profileId      String?
-  profile        InvestorProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  type           SnapshotType     @default(MANUAL)
-  rangeStart     DateTime?
-  rangeEnd       DateTime?
-  // Données brutes sérialisées (après minification éventuelle)
-  orders         Json?
-  positions      Json?
-  // Métriques agrégées (flexible: PnL, volume, expositions...)
-  metrics        Json?
-  totalOrders    Int?
-  totalPositions Int?
-  createdAt      DateTime         @default(now())
-
-  @@index([profileId, createdAt])
-  @@index([type, createdAt])
-  @@index([createdAt])
-}
-
 /// Abonnements newsletter
 model NewsletterSubscription {
-  id            Int                   @id @default(autoincrement())
-  email         String                @unique
-  isActive      Boolean               @default(true)
-  source        String?               @default("web")
+  id            Int                 @id @default(autoincrement())
+  email         String              @unique
+  isActive      Boolean             @default(true)
+  source        String?             @default("web")
   preferences   Json?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   lastEmailSent DateTime?
-  emailsSent    Int                   @default(0)
+  emailsSent    Int                 @default(0)
   sendLogs      NewsletterSendLog[]
 
   @@index([isActive, createdAt])
 }
 
 model NewsletterSendLog {
-  id              Int                    @id @default(autoincrement())
-  subscriptionId  Int
-  subscription    NewsletterSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  sentAt          DateTime               @default(now())
-  status          String
-  error           String?
+  id             Int                    @id @default(autoincrement())
+  subscriptionId Int
+  subscription   NewsletterSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  sentAt         DateTime               @default(now())
+  status         String
+  error          String?
 
   @@index([sentAt])
   @@index([status])
 }
 
-/// Historique des posts Facebook pour appliquer les règles de rate limiting côté serveur
-model FacebookPostLog {
-  id            Int      @id @default(autoincrement())
-  type          String
-  message       String?
-  duplicateHash String?
-  createdAt     DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([type, createdAt])
-  @@index([duplicateHash])
-}
-
 /// Historique de la dernière exécution d'un couple (investisseur, symbole)
 model InvestorSymbolExecution {
-  profileId String
-  symbol    String
-  lastExecutedAt DateTime @default(now())
-  profile   InvestorProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId      String
+  symbol         String
+  lastExecutedAt DateTime        @default(now())
+  profile        InvestorProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@id([profileId, symbol])
   @@index([lastExecutedAt])
   @@index([symbol, lastExecutedAt])
+}
+
+/// Positions fermées (historique)
+model ClosedPosition {
+  id               String          @id @default(dbgenerated("gen_random_uuid()"))
+  lastCloseOrderId String?         @unique
+
+  profileId String
+  profile   InvestorProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  symbol    String
+  holdSide  HoldSide
+  size      Decimal         @default(0)
+
+  entryPrice    Decimal?
+  exitPrice     Decimal?
+  entryNotional Decimal?
+  exitNotional  Decimal?
+
+  grossPnl     Decimal @default(0)
+  feesOpenUsed Decimal @default(0)
+  feesClose    Decimal @default(0)
+  realizedPnl  Decimal @default(0)
+
+  openedAt DateTime
+  closedAt DateTime
+
+  exchange        String?
+  marginCoin      String?
+  marginMode      String?
+  leverage        Int?
+  entryOrderCount Int?
+  closeOrderCount Int?
+  metadata        Json?
+
+  createdAt DateTime @default(now()) @map("cTime")
+  updatedAt DateTime @updatedAt @map("uTime")
+
+  @@index([profileId, symbol, openedAt])
 }

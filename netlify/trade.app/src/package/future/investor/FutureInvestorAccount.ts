@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Account } from "../../common/Account";
 import {
   MixHoldSideEnum,
@@ -6,16 +5,11 @@ import {
   JSONObject,
   JSONArray,
   Group,
-} from "../../common/MapperType";
+ CandlestickIntervalEnum } from "../../common/MapperType";
 import { FutureInvestorCopy } from "./FutureInvestorCopy";
 import { FutureInvestorCandle } from "./FutureInvestorCandle";
-import { CandlestickIntervalEnum } from "../../common/MapperType";
 import type { PrismaClient } from "@prisma/client";
-import {
-  prisma as sharedPrisma,
-  persistOrder,
-  persistPositions,
-} from "../../common/Persistence";
+import { prisma as sharedPrisma, persistOrder, persistPositions, OrdersRepo } from "../../common/Persistence";
 import { Label } from "../../common/Label";
 import { FilterRoi } from "../../filter/Filter";
 
@@ -58,9 +52,8 @@ export class FutureInvestorAccount
     symbol: string,
     currentPrice: number,
     mixHoldSideEnum: MixHoldSideEnum,
-    posObj: JSONObject
+    _posObj: JSONObject
   ): Promise<boolean> {
-    void posObj;
     return this.exit(symbol, currentPrice, mixHoldSideEnum);
   }
 
@@ -72,6 +65,39 @@ export class FutureInvestorAccount
     const data = await fetchFunction();
     this.cache[key] = data;
     return data;
+  }
+
+  // Délègue la persistance de la position au repository (DEV only)
+  private async persistCurrentPosition(
+    symbol: string,
+    mixHoldSideEnum: MixHoldSideEnum,
+    currentPrice: number
+  ): Promise<void> {
+    const investor = await this.prisma.investorProfile.findUnique({ where: { id: this.investorId } });
+    if (!investor) return;
+    const prePos = await this.getCurrentPosition(symbol, mixHoldSideEnum);
+    const qty = (prePos[Label.OPEN_SIZE] as number) || (prePos[Label.SIZE] as number) || 0;
+    const avg = (prePos[Label.AVERAGE_OPEN_PRICE] as number) || (prePos[Label.OPEN_PRICE_AVG] as number) || 0;
+    const leverage = (prePos[Label.OPEN_LEVERAGE] as number) || (this.group as any)?.margeLeverage || 1;
+    const mark = currentPrice > 0 ? currentPrice : avg;
+    const meta = {
+      leverage: (this.group as any)?.margeLeverage || 1,
+      marginMode: (this.group as any)?.marginMode || "crossed",
+      marginCoin: (this.group as any)?.marginCoin || "USDT",
+    };
+    if (qty <= 0 || avg <= 0) {
+      // marquer l’exécution sans stocker de payload
+      await persistPositions(investor, symbol);
+      return;
+    }
+    const posPayload: JSONObject = {
+      openLeverage: String(leverage),
+      openPriceAvg: String(avg),
+      available: String(qty),
+      margin: String(leverage > 0 ? Math.abs(qty * mark) / leverage : Math.abs(qty * mark)),
+      markPrice: String(mark),
+    } as JSONObject;
+    await persistPositions(investor, symbol, { [mixHoldSideEnum]: posPayload } as any, meta);
   }
 
   async entry(
@@ -162,10 +188,11 @@ export class FutureInvestorAccount
         (pos[Label.OPEN_SIZE] as number) || (pos[Label.SIZE] as number) || 0;
       if (qty <= 0) return false;
 
-      const investor = await this.prisma.investorProfile.findUnique({
-        where: { id: this.investorId },
-      });
+      const investor = await this.prisma.investorProfile.findUnique({ where: { id: this.investorId } });
       if (investor) {
+        // Persister la position actuelle AVANT de persister l'ordre de sortie
+        try { await this.persistCurrentPosition(symbol, mixHoldSideEnum, currentPrice); } catch {}
+
         const rawOrder: JSONObject = {
           orderId: `${this.investorId}-${symbol}-${Date.now()}-exit`,
           size: String(qty),
@@ -187,25 +214,7 @@ export class FutureInvestorAccount
           currentPrice,
           rawOrder,
         });
-        // Après fermeture, sauvegarder l'état de position (explicite plutôt que {} pour lisibilité)
-        try {
-          const positions: { [k in MixHoldSideEnum]?: JSONObject } = {};
-          // position fermée => envoyer objet avec zéros pour suppression/normalisation en BD
-          positions[mixHoldSideEnum] = {
-            available: "0",
-            marginSize: "0",
-            locked: "0",
-            openPriceAvg: "0",
-            rawPayload: {},
-          } as JSONObject;
-          const meta = {
-            leverage: (this.group as any)?.margeLeverage || 1,
-            marginMode: (this.group as any)?.marginMode || "crossed",
-            marginCoin: (this.group as any)?.marginCoin || "USDT",
-          };
-          await persistPositions(investor, symbol, positions, meta);
-
-          //envoyer de message telegram
+        //envoyer de message telegram
           try {
             const avg =
               (pos[Label.AVERAGE_OPEN_PRICE] as number) ||
@@ -238,9 +247,6 @@ export class FutureInvestorAccount
           } catch (e) {
             console.warn("telegram send failed", e);
           }
-        } catch (err) {
-          console.error("persistPositions (exit) error", err);
-        }
       } else {
         console.error(
           `exit: investor profile not found for id=${this.investorId}`
@@ -282,10 +288,11 @@ export class FutureInvestorAccount
 
     return (async () => {
       // Reconstituer historique à partir des orders (buy/sell) du profil & symbole
-      const history = await this.prisma.order.findMany({
-        where: { profileId: this.investorId, symbol },
-        orderBy: { createdAt: "asc" },
-      });
+      const history = await OrdersRepo.listByProfileSymbolPosSide(
+        this.investorId,
+        symbol,
+        mixHoldSideEnum.toLowerCase()
+      );
       let qty = 0;
       let cost = 0;
 
@@ -306,7 +313,7 @@ export class FutureInvestorAccount
             cost -= closed * avgPrice;
             qty = remain;
           }
-        } else {
+        } else if (mixHoldSideEnum === MixHoldSideEnum.SHORT) {
           // SHORT: SELL opens position, BUY closes
           if (action === OrderSideEnum.SELL) {
             qty += q;
@@ -337,8 +344,6 @@ export class FutureInvestorAccount
         if (candles && candles.length) {
           const last = candles[candles.length - 1];
           currentPrice = Number(last.close || 0);
-        } else {
-          currentPrice = 0;
         }
       } catch (err) {
         // En cas d'erreur d'accès au provider/candle, on retourne 0 (comportement antérieur
@@ -386,56 +391,48 @@ export class FutureInvestorAccount
     })();
   }
 
-  getHistoryPositions(symbol: string): Promise<JSONArray> {
-    return this.prisma.order
-      .findMany({
-        where: { profileId: this.investorId, symbol },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      })
-      .then((history) =>
-        history.map((h) => ({
-          id: h.orderId,
-          symbol: h.symbol,
-          action:
-            h.side === OrderSideEnum.BUY
-              ? OrderSideEnum.BUY
-              : OrderSideEnum.SELL,
-          price: Number(h.priceAvg || 0),
-          quantity: Number(h.size || 0),
-          amount: Number(h.quoteVolume || 0),
-          timestamp: h.createdAt,
-        }))
-      );
+  async getHistoryPositions(symbol: string): Promise<JSONArray> {
+    const history = await OrdersRepo.listByProfileAndSymbol(
+      this.investorId,
+      symbol,
+      50
+    );
+    return history.map((h) => ({
+      id: h.orderId,
+      symbol: h.symbol,
+      action: h.side === OrderSideEnum.BUY ? OrderSideEnum.BUY : OrderSideEnum.SELL,
+      price: Number(h.priceAvg || 0),
+      quantity: Number(h.size || 0),
+      amount: Number(h.quoteVolume || 0),
+      timestamp: h.createdAt,
+    }));
   }
 
-  getLastOrder(
+  async getLastOrder(
     symbol: string,
-    mixHoldSideEnum: MixHoldSideEnum
+    _mixHoldSideEnum: MixHoldSideEnum
   ): Promise<JSONObject> {
-    void mixHoldSideEnum;
-    // Récupérer la dernière order depuis la BD
-    return (async () => {
-      const last = await this.prisma.order.findFirst({
-        where: { profileId: this.investorId, symbol },
-        orderBy: { createdAt: "desc" },
-      });
-      if (!last) return {};
-      const obj: JSONObject = {};
-      obj[Label.SYMBOL] = symbol;
-      obj[Label.UTIME] = last.createdAt.getTime();
-      obj[Label.SIDE] = last.side;
-      obj[Label.PRICE] = Number(last.priceAvg || 0);
-      obj[Label.SIZE] = Number(last.size || 0);
-      return obj;
-    })();
+    const last = await OrdersRepo.findLastByProfileSymbol(this.investorId, symbol);
+    if (!last) return {};
+    const obj: JSONObject = {};
+    obj[Label.SYMBOL] = symbol;
+    obj[Label.UTIME] = last.createdAt.getTime();
+    obj[Label.SIDE] = last.side;
+    obj[Label.PRICE] = Number(last.priceAvg || 0);
+    obj[Label.SIZE] = Number(last.size || 0);
+    return obj;
   }
 
-  getCurrentPrice(symbol: string): Promise<number> {
-    return this.prisma.cryptoGemProject
-      .findFirst({ where: { symbol } })
-      .then((p) => p?.currentPrice ?? 0)
-      .catch(() => 0);
+  async getCurrentPrice(symbol: string): Promise<number> {
+    try {
+      const period = (this.group as any)?.period || CandlestickIntervalEnum.HOURLY;
+      const candles = await this.candle.getCandles(symbol, period, new Date(), 1);
+      if (!candles || candles.length === 0) return 0;
+      const last = candles[candles.length - 1];
+      return Number(last.close || 0);
+    } catch {
+      return 0;
+    }
   }
 
   getQtyToInvest(
@@ -443,24 +440,24 @@ export class FutureInvestorAccount
     currentPrice: number,
     mixHoldSideEnum: MixHoldSideEnum
   ): Promise<number> {
-    void symbol;
-    void mixHoldSideEnum;
     if (currentPrice <= 0) return Promise.resolve(0);
     return (async () => {
       const profile = await this.prisma.investorProfile.findUnique({
         where: { id: this.investorId },
       });
       if (!profile) return 0;
+      // Coercition des Decimal Prisma en nombres natifs pour les calculs
+      const initialBalance = Number(profile.initialBalance ?? 0);
+      const maxPositionSize = Number(profile.maxPositionSize ?? 0);
+      const riskTolerance = Number((profile as any).riskTolerance ?? 0.5);
       const pos = await this.getCurrentPosition(symbol, mixHoldSideEnum);
       const openSize =
         (pos[Label.OPEN_SIZE] as number) || (pos[Label.SIZE] as number) || 0;
       const currentValue = openSize * currentPrice;
-      const maxPositionValueUSD =
-        profile.initialBalance * (profile.maxPositionSize / 100);
+      const maxPositionValueUSD = initialBalance * (maxPositionSize / 100);
       const remainingCap = Math.max(0, maxPositionValueUSD - currentValue);
       if (remainingCap < 10) return 0;
-      const perOrderCap =
-        profile.initialBalance * (profile.riskTolerance || 0.5);
+      const perOrderCap = initialBalance * (riskTolerance || 0.5);
       const allocUSD = Math.max(0, Math.min(remainingCap, perOrderCap));
       return allocUSD / currentPrice;
     })();

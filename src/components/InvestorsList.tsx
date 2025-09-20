@@ -21,10 +21,24 @@ const getInvestorAvatar = (type: string): string => {
   return avatars[type] || '⚪'
 }
 
-// Fonction utilitaire pour formater le dernier trade
-const getLastTradeInfo = (investments: Investor['investments']): string => {
+// Fonction utilitaire pour formater le dernier trade/exec
+const getLastTradeInfo = (inv: Investor): string => {
+  // Priorité à la dernière exécution connue (persistée en BDD)
+  if (inv.lastExecutedAt) {
+    const lastDate = new Date(inv.lastExecutedAt)
+    const now = new Date()
+    const diffMs = now.getTime() - lastDate.getTime()
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays > 0) return `Il y a ${diffDays}j`
+    if (diffHours > 0) return `Il y a ${diffHours}h`
+    const diffMin = Math.floor((diffMs / (1000 * 60)))
+    if (diffMin > 0) return `Il y a ${diffMin}min`
+    return 'À l’instant'
+  }
+  const investments = inv.investments
   if (investments.length === 0) return 'Aucun trade'
-  
+
   const lastInvestment = investments[0] // Le plus récent (orderBy desc dans l'API)
   const lastDate = new Date(lastInvestment.timestamp)
   const now = new Date()
@@ -203,7 +217,7 @@ export default function InvestorsList() {
           const totalReturn = latestSnapshot?.totalReturnPercent || 0
           const winRate = latestSnapshot?.winRate || 0
           const activePositions = latestSnapshot?.activePositions || 0
-          const lastTrade = getLastTradeInfo(investor.investments)
+          const lastTrade = getLastTradeInfo(investor)
           const avatar = getInvestorAvatar(investor.type || '')
           const globalIndex = (currentPage - 1) * pageSize + index
           return (

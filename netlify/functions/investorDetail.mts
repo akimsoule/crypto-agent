@@ -1,4 +1,7 @@
 import { endpoint, json } from "./_lib/middleware.mts";
+import { InvestorEngineService } from "../trade.app/src/package/common/engine/InvestorEngineService";
+import { SecondaryAccountConfig } from "../trade.app/src/package/common/Config";
+import { FutureInvestorCandle } from "../trade.app/src/package/future/investor/FutureInvestorCandle";
 import {
   baseFromSymbol,
   computeUnrealized,
@@ -9,6 +12,30 @@ import {
 } from "./_lib/pnl.mts";
 import type { OrderLite } from "./_lib/pnl.mts";
 
+// Types locaux pour refléter les sélections Prisma et gérer Decimal
+type OrderLiteSelect = {
+  orderId: string;
+  symbol: string;
+  createdAt: Date;
+  baseVolume: unknown;
+  priceAvg: unknown;
+  side?: string | null;
+  posSide?: string | null;
+};
+type ProfileWithOrders = {
+  id: string;
+  name: string;
+  type: string;
+  initialBalance: unknown | null;
+  leverage?: number | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  riskTolerance: unknown | null;
+  maxPositionSize: unknown | null;
+  strategyName: string;
+  Order: OrderLiteSelect[];
+};
 
 export default endpoint({
   methods: ["GET"],
@@ -20,6 +47,7 @@ export default endpoint({
     const debug =
       url.searchParams.get("debug") === "1" ||
       url.searchParams.get("debug") === "true";
+    const engineParam = url.searchParams.get("engine") === "1";
     const onlySide =
       sideParam === "long" || sideParam === "short"
         ? (sideParam as "long" | "short")
@@ -27,7 +55,7 @@ export default endpoint({
     if (!id) return json({ success: false, error: "Param id requis" }, 400);
 
     // Récupération du profil + relations nécessaires
-    const profile = await prisma.investorProfile.findUnique({
+    const profileRaw = await prisma.investorProfile.findUnique({
       where: { id },
       include: {
         Order: {
@@ -43,12 +71,9 @@ export default endpoint({
             posSide: true,
           },
         },
-        snapshots: {
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        },
       },
     });
+    const profile = profileRaw as unknown as ProfileWithOrders | null;
 
     if (!profile)
       return json({ success: false, error: "Investor introuvable" }, 404);
@@ -74,11 +99,11 @@ export default endpoint({
       onlySide,
     });
     // Valeur approximative: balance initiale + PnL latent (en attendant un suivi de balance réel)
-    const initialBalance = profile.initialBalance ?? 0;
+    const initialBalance = toNum(profile.initialBalance ?? 0);
     const totalValue = initialBalance + totalUnrealized;
     const totalReturn = totalValue - initialBalance;
     const totalReturnPercent =
-      initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;
+  initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;
 
     // Construction d'un snapshot courant synthétique
     const currentSnapshot = {
@@ -103,28 +128,7 @@ export default endpoint({
     };
 
     // Adaptation des snapshots historiques si des métriques sont présentes
-    const historical = profile.snapshots.map((s: { createdAt: Date; metrics?: unknown | null }) => {
-      const metrics = (s.metrics as any) || {};
-      return {
-        id: 1, // placeholder uniforme (le front n'utilise peut-être pas encore l'id réel)
-        investorId: profile.id,
-        timestamp: s.createdAt.toISOString(),
-        totalValue: toNum(metrics.totalValue),
-        cashBalance: toNum(metrics.cashBalance),
-        totalReturn: toNum(metrics.totalReturn),
-        totalReturnPercent: toNum(metrics.totalReturnPercent),
-        currentGain: toNum(metrics.currentGain),
-        winRate: toNum(metrics.winRate),
-        avgWinPercent: toNum(metrics.avgWinPercent),
-        avgLossPercent: toNum(metrics.avgLossPercent),
-        maxDrawdown: toNum(metrics.maxDrawdown),
-        totalTrades: toNum(metrics.totalTrades),
-        winningTrades: toNum(metrics.winningTrades),
-        losingTrades: toNum(metrics.losingTrades),
-        activePositions: toNum(metrics.activePositions),
-        positions: [],
-      };
-    });
+      const historical: any[] = [];
 
     // Investments : on dérive des Orders récentes (structure minimaliste)
     const investments = profile.Order.slice(-20)
@@ -150,7 +154,7 @@ export default endpoint({
     }
 
     // Enrichir positions / investments avec lastExecutedAt si disponible
-    const positionsWithExec: any[] = [];
+  const positionsWithExec: any[] = [];
     const investmentsWithExec = investments.map((i: { symbol: string }) => ({
       ...i,
       lastExecutedAt: execMap.get(i.symbol) || null,
@@ -160,12 +164,30 @@ export default endpoint({
       ([symbol, lastExecutedAt]) => ({ symbol, lastExecutedAt })
     );
 
+    // Optionnel: calcul via TradingEngine si demandé (engine=1)
+    let engine: any = undefined;
+    if (engineParam) {
+      try {
+        const cfg = SecondaryAccountConfig.SECOND_DEFAULT_CONFIG();
+        const candle = new FutureInvestorCandle(cfg);
+        const svc = new InvestorEngineService(candle);
+        const snap = await svc.snapshot(profile.id, profile.leverage ?? 10);
+        engine = {
+          positions: snap.positions,
+          portfolio: snap.portfolio,
+          realized: snap.realized,
+        };
+      } catch (e) {
+        console.warn('[investorDetail] engine snapshot failed', (e as Error).message);
+      }
+    }
+
     return {
       id: profile.id,
       name: profile.name,
       type: profile.type,
-      riskTolerance: profile.riskTolerance ?? 0,
-      maxPositionSize: profile.maxPositionSize ?? 0,
+  riskTolerance: toNum(profile.riskTolerance ?? 0),
+  maxPositionSize: toNum(profile.maxPositionSize ?? 0),
       holdingPeriod: 0,
       sellThreshold: 0,
       stopLoss: 0,
@@ -179,6 +201,7 @@ export default endpoint({
       investments: investmentsWithExec,
       portfolioSnapshots: [currentSnapshot, ...historical],
       openPositions: positionsDetail,
+      ...(engine ? { engine } : {}),
       ...(debug
         ? {
             priceDebug: allBaseSymbols.map((b) => ({
