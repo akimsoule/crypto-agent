@@ -1,3 +1,6 @@
+-- CreateEnum
+CREATE TYPE "public"."HoldSide" AS ENUM ('long', 'short');
+
 -- CreateTable
 CREATE TABLE "public"."InvestorProfile" (
     "id" TEXT NOT NULL,
@@ -12,11 +15,11 @@ CREATE TABLE "public"."InvestorProfile" (
     "marginMode" TEXT NOT NULL,
     "exit" BOOLEAN,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "initialBalance" DOUBLE PRECISION NOT NULL DEFAULT 10000,
-    "maxPositionSize" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "riskTolerance" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-    "riskMin" DOUBLE PRECISION,
-    "riskMax" DOUBLE PRECISION,
+    "initialBalance" DECIMAL(65,30) NOT NULL DEFAULT 10000,
+    "maxPositionSize" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "riskTolerance" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "riskMin" DECIMAL(65,30),
+    "riskMax" DECIMAL(65,30),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -28,12 +31,12 @@ CREATE TABLE "public"."Order" (
     "orderId" TEXT NOT NULL,
     "profileId" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
-    "size" TEXT NOT NULL,
+    "size" DECIMAL(65,30) NOT NULL DEFAULT 0,
     "clientOid" TEXT NOT NULL,
-    "baseVolume" TEXT NOT NULL,
-    "fee" TEXT DEFAULT '0',
-    "priceAvg" TEXT NOT NULL,
-    "quoteVolume" TEXT NOT NULL,
+    "baseVolume" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "fee" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "priceAvg" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "quoteVolume" DECIMAL(65,30) NOT NULL DEFAULT 0,
     "side" TEXT NOT NULL,
     "posSide" TEXT NOT NULL,
     "rawPayload" JSONB,
@@ -41,28 +44,6 @@ CREATE TABLE "public"."Order" (
     "uTime" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Order_pkey" PRIMARY KEY ("orderId")
-);
-
--- CreateTable
-CREATE TABLE "public"."Position" (
-    "id" TEXT NOT NULL,
-    "profileId" TEXT NOT NULL,
-    "marginCoin" TEXT NOT NULL,
-    "symbol" TEXT NOT NULL,
-    "holdSide" TEXT NOT NULL,
-    "marginSize" TEXT NOT NULL,
-    "available" TEXT NOT NULL,
-    "locked" TEXT NOT NULL,
-    "openPriceAvg" TEXT NOT NULL,
-    "marginMode" TEXT NOT NULL,
-    "unrealizedPL" TEXT NOT NULL,
-    "markPrice" TEXT NOT NULL,
-    "leverage" TEXT NOT NULL,
-    "rawPayload" JSONB,
-    "cTime" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "uTime" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Position_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -109,6 +90,37 @@ CREATE TABLE "public"."InvestorSymbolExecution" (
     CONSTRAINT "InvestorSymbolExecution_pkey" PRIMARY KEY ("profileId","symbol")
 );
 
+-- CreateTable
+CREATE TABLE "public"."ClosedPosition" (
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
+    "lastCloseOrderId" TEXT,
+    "profileId" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "holdSide" "public"."HoldSide" NOT NULL,
+    "size" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "entryPrice" DECIMAL(65,30),
+    "exitPrice" DECIMAL(65,30),
+    "entryNotional" DECIMAL(65,30),
+    "exitNotional" DECIMAL(65,30),
+    "grossPnl" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "feesOpenUsed" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "feesClose" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "realizedPnl" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "openedAt" TIMESTAMP(3) NOT NULL,
+    "closedAt" TIMESTAMP(3) NOT NULL,
+    "exchange" TEXT,
+    "marginCoin" TEXT,
+    "marginMode" TEXT,
+    "leverage" INTEGER,
+    "entryOrderCount" INTEGER,
+    "closeOrderCount" INTEGER,
+    "metadata" JSONB,
+    "cTime" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "uTime" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ClosedPosition_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "InvestorProfile_name_key" ON "public"."InvestorProfile"("name");
 
@@ -128,15 +140,6 @@ CREATE INDEX "Order_cTime_uTime_idx" ON "public"."Order"("cTime", "uTime");
 CREATE INDEX "Order_profileId_symbol_cTime_idx" ON "public"."Order"("profileId", "symbol", "cTime");
 
 -- CreateIndex
-CREATE INDEX "Position_symbol_idx" ON "public"."Position"("symbol");
-
--- CreateIndex
-CREATE INDEX "Position_marginCoin_holdSide_idx" ON "public"."Position"("marginCoin", "holdSide");
-
--- CreateIndex
-CREATE UNIQUE INDEX "Position_profileId_symbol_holdSide_key" ON "public"."Position"("profileId", "symbol", "holdSide");
-
--- CreateIndex
 CREATE UNIQUE INDEX "NewsletterSubscription_email_key" ON "public"."NewsletterSubscription"("email");
 
 -- CreateIndex
@@ -154,14 +157,20 @@ CREATE INDEX "InvestorSymbolExecution_lastExecutedAt_idx" ON "public"."InvestorS
 -- CreateIndex
 CREATE INDEX "InvestorSymbolExecution_symbol_lastExecutedAt_idx" ON "public"."InvestorSymbolExecution"("symbol", "lastExecutedAt");
 
--- AddForeignKey
-ALTER TABLE "public"."Order" ADD CONSTRAINT "Order_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- CreateIndex
+CREATE UNIQUE INDEX "ClosedPosition_lastCloseOrderId_key" ON "public"."ClosedPosition"("lastCloseOrderId");
+
+-- CreateIndex
+CREATE INDEX "ClosedPosition_profileId_symbol_openedAt_idx" ON "public"."ClosedPosition"("profileId", "symbol", "openedAt");
 
 -- AddForeignKey
-ALTER TABLE "public"."Position" ADD CONSTRAINT "Position_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."Order" ADD CONSTRAINT "Order_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."NewsletterSendLog" ADD CONSTRAINT "NewsletterSendLog_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "public"."NewsletterSubscription"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."InvestorSymbolExecution" ADD CONSTRAINT "InvestorSymbolExecution_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."ClosedPosition" ADD CONSTRAINT "ClosedPosition_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "public"."InvestorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
