@@ -39,8 +39,6 @@ export default async function handler(request: Request, _context: Context) {
       log('Reset des données investors');
       // Supprime les entités dépendantes dans un ordre sûr
       await prisma.investorSymbolExecution.deleteMany();
-      await prisma.snapshot.deleteMany();
-      await prisma.position.deleteMany();
       await prisma.order.deleteMany();
       await prisma.investorProfile.deleteMany();
     }
