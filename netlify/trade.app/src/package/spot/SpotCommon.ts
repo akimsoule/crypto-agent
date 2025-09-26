@@ -313,9 +313,14 @@ class SpotCommon extends CommonUtils implements Common {
               `Error processing position for ${asset.coin} (possibly withdrawn/delisted):`,
               (error &&
                 typeof error === "object" &&
+                error !== null &&
                 "body" in error &&
-                (error).body?.msg) ||
-                error
+                typeof (error as any).body === "object" &&
+                (error as any).body !== null &&
+                "msg" in (error as any).body
+                  ? (error as any).body.msg
+                  : error
+              )
             );
           }
         }
