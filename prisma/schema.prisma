@@ -32,6 +32,8 @@ model InvestorProfile {
   exit                     Boolean?
   isActive                 Boolean                   @default(true)
   initialBalance           Decimal                   @default(10000)
+  // Balance courante simulée (mise à jour lors des fermetures de positions)
+  currentBalance           Decimal                   @default(0)
   maxPositionSize          Decimal                   @default(0)
   riskTolerance            Decimal                   @default(0) // 0-1 (ex: 0.02 = 2% risque)
   // Plage indicative de tolérance au risque (issue des presets): 0-1

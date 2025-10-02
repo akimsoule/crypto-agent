@@ -56,5 +56,8 @@ fi
 step "5. Build"
 npm run build
 
+step "6. Rebuild balances & purge closed orders"
+npm run --silent rebuild:balances || { log "Rebuild balances failed"; exit 1; }
+
 step "Terminé"
 log "Déploiement réussi."

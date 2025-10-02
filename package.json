@@ -17,7 +17,8 @@
     "runDev": "tsx netlify/trade.app/src/main/Second/Prod/runDev.ts",
     "dev:cron:once": "tsx scripts/dev-cron-once.ts",
     "runProdLocal": "APP_ENV=production tsx scripts/dev-cron-once.ts",
-    "runDevCharts": "SHOW_ASCII=1 tsx netlify/trade.app/src/main/Second/Prod/runDev.ts"
+    "runDevCharts": "SHOW_ASCII=1 tsx netlify/trade.app/src/main/Second/Prod/runDev.ts",
+    "rebuild:balances": "tsx scripts/rebuild-balances.ts"
   },
   "dependencies": {
     "@netlify/functions": "^3.1.10",
@@ -51,6 +52,7 @@
     "@eslint/js": "^9.33.0",
     "@tailwindcss/postcss": "^4.1.12",
     "@testing-library/react": "^16.3.0",
+    "@types/asciichart": "^1.5.8",
     "@types/node": "^22.18.1",
     "@types/node-telegram-bot-api": "^0.64.11",
     "@types/react": "^19.1.10",

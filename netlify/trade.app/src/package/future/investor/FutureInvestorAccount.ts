@@ -10,6 +10,7 @@ import { FutureInvestorCopy } from "./FutureInvestorCopy";
 import { FutureInvestorCandle } from "./FutureInvestorCandle";
 import type { PrismaClient } from "@prisma/client";
 import { prisma as sharedPrisma, persistOrder, persistPositions, OrdersRepo } from "../../common/Persistence";
+import { TradingEngine, MixHoldSideEnum as EngineHoldSideEnum, OrderSideEnum as EngineOrderSideEnum, type Order as EngineOrder } from "../../common/engine/engine";
 import { Label } from "../../common/Label";
 import { FilterRoi } from "../../filter/Filter";
 
@@ -214,6 +215,70 @@ export class FutureInvestorAccount
           currentPrice,
           rawOrder,
         });
+        // 1. Charger tous les ordres du profil pour le symbole+posSide
+        let realizedPnl = 0;
+        let deletedOrderIds: string[] = [];
+        try {
+          const orderRecords = await OrdersRepo.listByProfileSymbolPosSide(investor.id, symbol, mixHoldSideEnum.toLowerCase());
+          // Construire les ordres pour le moteur
+          const engineOrders: EngineOrder[] = orderRecords
+            .sort((a,b)=> a.createdAt.getTime()-b.createdAt.getTime())
+            .map(r => ({
+              id: r.orderId,
+              symbol: r.symbol,
+              side: String(r.side).toLowerCase() === 'sell' ? EngineOrderSideEnum.SELL : EngineOrderSideEnum.BUY,
+              posSide: mixHoldSideEnum === MixHoldSideEnum.LONG ? EngineHoldSideEnum.LONG : EngineHoldSideEnum.SHORT,
+              size: Number(r.size),
+              priceAvg: Number(r.priceAvg),
+              fee: Number(r.fee || 0),
+              createdAt: r.createdAt,
+            }));
+          // Ajouter l'ordre de fermeture simulé dans le moteur pour finaliser le round
+          engineOrders.push({
+            id: rawOrder.orderId as string,
+            symbol,
+            side: mixHoldSideEnum === MixHoldSideEnum.LONG ? EngineOrderSideEnum.SELL : EngineOrderSideEnum.BUY,
+            posSide: mixHoldSideEnum === MixHoldSideEnum.LONG ? EngineHoldSideEnum.LONG : EngineHoldSideEnum.SHORT,
+            size: qty,
+            priceAvg: currentPrice,
+            fee: 0,
+            createdAt: new Date(),
+          });
+          const engine = new TradingEngine(engineOrders, Number((this.group as any)?.margeLeverage || 1));
+          const closedTrades = engine.getClosedTrades().filter(ct => ct.symbol === symbol && ct.posSide === (mixHoldSideEnum === MixHoldSideEnum.LONG ? EngineHoldSideEnum.LONG : EngineHoldSideEnum.SHORT));
+          // Dernier trade fermé correspond au round actuel
+            const lastClosed = closedTrades[closedTrades.length -1];
+            if (lastClosed) {
+              realizedPnl = lastClosed.realizedPnl;
+              // Déterminer quels ordres constituent ce round: on rejoue jusqu'à closedAt
+              // Simplification: on supprime tous les ordres historiques + l'ordre de sortie simulé (rawOrder)
+              deletedOrderIds = orderRecords.map(o=>o.orderId);
+            }
+          // Mettre à jour balance = initialBalance + somme realizedPnl de tous trades fermés (recalcul global)
+          const allOrdersProfile = await OrdersRepo.listByProfile(investor.id);
+          const allEngineOrders: EngineOrder[] = allOrdersProfile.map(r => ({
+            id: r.orderId,
+            symbol: r.symbol,
+            side: String(r.side).toLowerCase() === 'sell' ? EngineOrderSideEnum.SELL : EngineOrderSideEnum.BUY,
+            posSide: String(r.posSide).toLowerCase().includes('short') ? EngineHoldSideEnum.SHORT : EngineHoldSideEnum.LONG,
+            size: Number(r.size),
+            priceAvg: Number(r.priceAvg),
+            fee: Number(r.fee || 0),
+            createdAt: r.createdAt,
+          }));
+          // Inclure l'ordre de sortie dans le calcul global
+          allEngineOrders.push(engineOrders[engineOrders.length-1]);
+          const globalEngine = new TradingEngine(allEngineOrders, Number((this.group as any)?.margeLeverage || 1));
+          const realizedStats = globalEngine.getRealizedPnLStats();
+          const newBalance = Number(investor.initialBalance || 0) + realizedStats.totalRealizedPnL;
+          await this.prisma.investorProfile.update({ where: { id: investor.id }, data: { currentBalance: newBalance } });
+          // Suppression des ordres du round fermé (historique symbol+posSide) pour repartir sur base clean
+          if (deletedOrderIds.length) {
+            await this.prisma.order.deleteMany({ where: { orderId: { in: deletedOrderIds } } });
+          }
+        } catch(err) {
+          console.warn('exit: engine reconstruction failed', err);
+        }
         //envoyer de message telegram
           try {
             const avg =
@@ -238,6 +303,7 @@ export class FutureInvestorAccount
               `• 🎯 Avg: ${avg.toFixed(6)}`,
               `• 💵 Price: ${currentPrice.toFixed(6)}`,
               `• ${trendEmoji} PnL: ${sign}${pnl.toFixed(2)} USDT (${sign}${pnlPct.toFixed(2)}%)`,
+              `• 💼 Balance: ${(Number(investor.initialBalance || 0) + realizedPnl).toFixed(2)} USDT (simulé)`,
               `• ⏱️ ${when}`,
             ].join("\n");
             await this.candle.config.telegramClient.sendMessage(

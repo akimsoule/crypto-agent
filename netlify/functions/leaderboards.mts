@@ -39,34 +39,44 @@ export default endpoint({
     const url = new URL(req.url);
     const includeInactive = url.searchParams.get("includeInactive") === "1";
     const sideParam = (url.searchParams.get("side") || "").toLowerCase();
-    const onlySide = sideParam === "long" || sideParam === "short" ? (sideParam as "long" | "short") : undefined;
-    const limit = Math.max(1, Math.min(10, parseInt(url.searchParams.get("limit") || "3", 10)));
+    const onlySide =
+      sideParam === "long" || sideParam === "short"
+        ? (sideParam as "long" | "short")
+        : undefined;
+    const limit = Math.max(
+      1,
+      Math.min(10, parseInt(url.searchParams.get("limit") || "3", 10))
+    );
 
     // Charger profils + orders nécessaires
-    const profiles: ProfileWithOrders[] = await prisma.investorProfile.findMany({
-      where: includeInactive ? {} : { isActive: true },
-      orderBy: { createdAt: "asc" },
-      include: {
-        Order: {
-          orderBy: { createdAt: "asc" },
-          take: 400,
-          select: {
-            orderId: true,
-            symbol: true,
-            createdAt: true,
-            baseVolume: true,
-            priceAvg: true,
-            side: true,
-            posSide: true,
+    const profiles: ProfileWithOrders[] = await prisma.investorProfile.findMany(
+      {
+        where: includeInactive ? {} : { isActive: true },
+        orderBy: { createdAt: "asc" },
+        include: {
+          Order: {
+            orderBy: { createdAt: "asc" },
+            take: 400,
+            select: {
+              orderId: true,
+              symbol: true,
+              createdAt: true,
+              baseVolume: true,
+              priceAvg: true,
+              side: true,
+              posSide: true,
+            },
           },
         },
-      },
-    });
+      }
+    );
 
     // Prix de marché pour bases utilisées
     const allBaseSymbols: string[] = Array.from(
       new Set(
-        profiles.flatMap((p) => (p.Order ?? []).map((o) => baseFromSymbol(o.symbol)))
+        profiles.flatMap((p) =>
+          (p.Order ?? []).map((o) => baseFromSymbol(o.symbol))
+        )
       )
     );
     const priceMap = await getPriceMap(allBaseSymbols, { ttlMs: 15_000 });
@@ -74,7 +84,12 @@ export default endpoint({
     // Agrégations
     const symbolPnL = new Map<string, number>();
     const symbolValues = new Map<string, number[]>();
-    const investorRates: { id: string; name: string; rate: number; totalReturnPercent: number }[] = [];
+    const investorRates: {
+      id: string;
+      name: string;
+      rate: number;
+      totalReturnPercent: number;
+    }[] = [];
 
     for (const p of profiles) {
       const orders = p.Order ?? [];
@@ -92,17 +107,23 @@ export default endpoint({
       }
 
       // Taux de gain par temps
-      const { totalUnrealized } = computeUnrealized(states, priceMap, { onlySide });
-  const initialBalance = toNum(p.initialBalance ?? 0);
+      const { totalUnrealized } = computeUnrealized(states, priceMap, {
+        onlySide,
+      });
+      const initialBalance = toNum(p.initialBalance ?? 0);
       const totalValue = initialBalance + totalUnrealized;
       const totalReturn = totalValue - initialBalance;
-      const totalReturnPercent = initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;
+      const totalReturnPercent =
+        initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;
       const oldest = orders.reduce<Date | null>((acc, it) => {
         const d = new Date(it.createdAt);
         return !acc || d < acc ? d : acc;
       }, null);
       const start = oldest || new Date(Date.now() - 24 * 3600 * 1000);
-      const days = Math.max(0.5, (Date.now() - start.getTime()) / (24 * 3600 * 1000));
+      const days = Math.max(
+        0.5,
+        (Date.now() - start.getTime()) / (24 * 3600 * 1000)
+      );
       const rate = totalReturnPercent / days; // % par jour
       investorRates.push({ id: p.id, name: p.name, rate, totalReturnPercent });
     }
@@ -119,9 +140,14 @@ export default endpoint({
 
     const topRegularYieldCryptos = Array.from(symbolValues.entries())
       .map(([symbol, vals]) => {
-        if (vals.length === 0) return { symbol, score: -Infinity, mean: 0, std: 0 };
+        if (vals.length === 0)
+          return { symbol, score: -Infinity, mean: 0, std: 0 };
         const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
-        const variance = vals.length > 1 ? vals.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / (vals.length - 1) : 0;
+        const variance =
+          vals.length > 1
+            ? vals.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) /
+              (vals.length - 1)
+            : 0;
         const std = Math.sqrt(variance);
         const score = mean > 0 ? mean / (std || 1e-6) : -Infinity;
         return { symbol, score, mean, std };
