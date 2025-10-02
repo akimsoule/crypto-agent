@@ -60,7 +60,6 @@ export default function InvestorsList() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
-  const [sortKey, setSortKey] = useState<'avgGain' | 'totalReturn' | 'winRate' | 'topPnL' | 'volatility' | 'stability'>('avgGain');
   const [minAvgGain, setMinAvgGain] = useState<number>(-Infinity);
   const [symbolFilter, setSymbolFilter] = useState<string>('');
   const [multiSymbols, setMultiSymbols] = useState<string>('');
@@ -70,38 +69,21 @@ export default function InvestorsList() {
   // Types internes enrichis
   interface EnrichedInvestor extends Investor { _avgGain: number; _topPnL: number }
 
-  const enhancedInvestors = useMemo<EnrichedInvestor[]>(() => {
-    return investors.map(inv => {
-      const snaps = inv.portfolioSnapshots || [];
-      const avgGain = snaps.length ? snaps.reduce((acc, s) => acc + (s.totalReturnPercent || 0), 0) / snaps.length : 0;
-      const topPnL = inv.perSymbolUnrealized?.[0]?.unrealized ?? 0;
-      return { ...inv, _avgGain: avgGain, _topPnL: topPnL };
-    });
-  }, [investors]);
+  const enhancedInvestors = useMemo<EnrichedInvestor[]>(() => investors.map(inv => {
+    const snaps = inv.portfolioSnapshots || [];
+    const avgGain = snaps.length ? snaps.reduce((acc, s) => acc + (s.totalReturnPercent || 0), 0) / snaps.length : 0;
+    const topPnL = inv.perSymbolUnrealized?.[0]?.unrealized ?? 0;
+    return { ...inv, _avgGain: avgGain, _topPnL: topPnL };
+  }), [investors]);
 
-  const filteredSortedInvestors = useMemo<EnrichedInvestor[]>(() => {
-    return enhancedInvestors
-      .filter(inv => (minAvgGain === -Infinity ? true : inv._avgGain >= minAvgGain))
-      .filter(inv => (symbolFilter ? (inv.topSymbol === symbolFilter || inv.perSymbolUnrealized?.some((p: {symbol: string}) => p.symbol === symbolFilter) || inv.investments.some((i: {symbol: string})=> i.symbol === symbolFilter)) : true))
-      .filter(inv => (parsedMultiSymbols.length === 0 ? true : parsedMultiSymbols.some(sym =>
-        inv.perSymbolUnrealized?.some((p: {symbol: string})=>p.symbol === sym) || inv.investments.some((i: {symbol: string})=>i.symbol === sym)
-      )))
-      .sort((a,b) => {
-        switch (sortKey) {
-          case 'avgGain': return b._avgGain - a._avgGain;
-          case 'totalReturn': return (b.portfolioSnapshots[0]?.totalReturnPercent || 0) - (a.portfolioSnapshots[0]?.totalReturnPercent || 0);
-          case 'winRate': return (b.portfolioSnapshots[0]?.winRate || 0) - (a.portfolioSnapshots[0]?.winRate || 0);
-          case 'topPnL': return (b._topPnL || 0) - (a._topPnL || 0);
-          case 'volatility': return (a.volatilityProxy || 0) - (b.volatilityProxy || 0);
-          case 'stability': {
-            const av = (a.volatilityProxy ?? 9999) + ((a.unrealizedDispersion ?? 0)/100);
-            const bv = (b.volatilityProxy ?? 9999) + ((b.unrealizedDispersion ?? 0)/100);
-            return av - bv; // plus faible = plus stable
-          }
-          default: return 0;
-        }
-      });
-  }, [enhancedInvestors, sortKey, minAvgGain, symbolFilter, parsedMultiSymbols]);
+  const filteredSortedInvestors = useMemo<EnrichedInvestor[]>(() => enhancedInvestors
+    .filter(inv => (minAvgGain === -Infinity ? true : inv._avgGain >= minAvgGain))
+    .filter(inv => (symbolFilter ? (inv.topSymbol === symbolFilter || inv.perSymbolUnrealized?.some((p: {symbol: string}) => p.symbol === symbolFilter) || inv.investments.some((i: {symbol: string})=> i.symbol === symbolFilter)) : true))
+    .filter(inv => (parsedMultiSymbols.length === 0 ? true : parsedMultiSymbols.some(sym =>
+      inv.perSymbolUnrealized?.some((p: {symbol: string})=>p.symbol === sym) || inv.investments.some((i: {symbol: string})=>i.symbol === sym)
+    )))
+    .sort((a,b) => (b.totalGain ?? Number.NEGATIVE_INFINITY) - (a.totalGain ?? Number.NEGATIVE_INFINITY))
+  , [enhancedInvestors, minAvgGain, symbolFilter, parsedMultiSymbols]);
 
   const paginatedInvestors = filteredSortedInvestors.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const totalPages = Math.ceil(filteredSortedInvestors.length / pageSize)
@@ -155,28 +137,18 @@ export default function InvestorsList() {
       <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
         <h2 className="text-xl sm:text-2xl font-bold">🤖 Nos Investisseurs IA</h2>
         <div className="flex flex-wrap items-center gap-3">
+          {/* Tri unique totalGain – sélecteur supprimé */}
           <div className="flex items-center gap-2">
-            <label className="text-xs">Tri</label>
-            <select className="select select-bordered select-xs" value={sortKey} onChange={e => {const v = e.target.value as typeof sortKey; setSortKey(v); setCurrentPage(1);}}>
-              <option value="avgGain">Gain moyen</option>
-              <option value="totalReturn">Perf récente</option>
-              <option value="winRate">Taux réussite</option>
-              <option value="topPnL">Top PnL</option>
-              <option value="volatility">Volatilité (faible)</option>
-              <option value="stability">Stabilité</option>
-            </select>
+            <label className="text-xs" htmlFor="minGain">Gain ≥</label>
+            <input id="minGain" type="number" className="input input-bordered input-xs w-20" placeholder="%" onChange={e => { const v = e.target.value === '' ? -Infinity : Number(e.target.value); setMinAvgGain(v); setCurrentPage(1); }} />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs">Gain ≥</label>
-            <input type="number" className="input input-bordered input-xs w-20" placeholder="%" onChange={e => { const v = e.target.value === '' ? -Infinity : Number(e.target.value); setMinAvgGain(v); setCurrentPage(1); }} />
+            <label className="text-xs" htmlFor="symFilter">Symbole</label>
+            <input id="symFilter" type="text" className="input input-bordered input-xs w-24" placeholder="BTCUSDT" value={symbolFilter} onChange={e => { setSymbolFilter(e.target.value.trim().toUpperCase()); setCurrentPage(1); }} />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs">Symbole</label>
-            <input type="text" className="input input-bordered input-xs w-24" placeholder="BTCUSDT" value={symbolFilter} onChange={e => { setSymbolFilter(e.target.value.trim().toUpperCase()); setCurrentPage(1); }} />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs">Multi</label>
-            <input type="text" className="input input-bordered input-xs w-32" placeholder="BTC,ETH,SOL" value={multiSymbols} onChange={e => { setMultiSymbols(e.target.value); setCurrentPage(1); }} />
+            <label className="text-xs" htmlFor="multiFilter">Multi</label>
+            <input id="multiFilter" type="text" className="input input-bordered input-xs w-32" placeholder="BTC,ETH,SOL" value={multiSymbols} onChange={e => { setMultiSymbols(e.target.value); setCurrentPage(1); }} />
           </div>
           <div className="flex items-center gap-1 text-xs">
             <label className="cursor-pointer flex items-center gap-1">

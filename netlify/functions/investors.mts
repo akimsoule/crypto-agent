@@ -124,6 +124,34 @@ export default endpoint({
       console.warn('[investors] getPriceMap failed', (e as Error).message);
     }
 
+    // Pré-agrégations realized en une seule requête par profil (group by profileId)
+    let realizedByProfile = new Map<string, number>();
+    try {
+      const realizedRows = await prisma.closedPosition.groupBy({
+        by: ['profileId'],
+        _sum: { realizedPnl: true },
+        where: { profileId: { in: profileIds } },
+      });
+      for (const r of realizedRows) {
+        realizedByProfile.set(r.profileId, Number(r._sum.realizedPnl || 0));
+      }
+    } catch (e) {
+      console.warn('[investors] groupBy closedPosition failed', (e as Error).message);
+    }
+
+    // Récupérer currentBalance pour les mêmes profils (deuxième requête batch)
+    let balances: Array<{ id: string; currentBalance: unknown; initialBalance: unknown } > = [];
+    try {
+      balances = await prisma.investorProfile.findMany({
+        where: { id: { in: profileIds } },
+        select: { id: true, currentBalance: true, initialBalance: true },
+      });
+    } catch (e) {
+      console.warn('[investors] fetch balances failed', (e as Error).message);
+    }
+    const balanceMap = new Map<string, { current?: number; initial?: number }>();
+    for (const b of balances) balanceMap.set(b.id, { current: b.currentBalance != null ? Number(b.currentBalance) : undefined, initial: b.initialBalance != null ? Number(b.initialBalance) : undefined });
+
     return profiles.map((p: ProfileWithOrders) => {
       const initialBalance = toNum(p.initialBalance);
       // Agrégat realized
@@ -175,9 +203,16 @@ export default endpoint({
       // Marge: si champ currentBalance disponible, calcul totalGain vs initialBalance
       // On lira direct currentBalance par requête supplémentaire plus tard si nécessaire pour performance.
       // Placeholders (non résolus ici pour éviter N requêtes) -> front utilisera investorDetail pour détail.
-      const realizedPnlTotal = undefined; // lazy (optim: batch plus tard)
-      const totalGain = undefined;
-      const totalGainPercent = undefined;
+      const realizedPnlTotal = realizedByProfile.get(p.id);
+      const balanceInfo = balanceMap.get(p.id);
+      let totalGain: number | undefined = undefined;
+      if (balanceInfo?.current != null && balanceInfo.initial != null) {
+        totalGain = balanceInfo.current - balanceInfo.initial;
+      } else if (realizedPnlTotal != null) {
+        // fallback: realized + latent courant (approx)
+        totalGain = realizedPnlTotal + totalUnrealized;
+      }
+      const totalGainPercent = (totalGain != null && initialBalance > 0) ? (totalGain / initialBalance) * 100 : undefined;
 
       const investments = (p.Order ?? [])
         .slice(-10)
