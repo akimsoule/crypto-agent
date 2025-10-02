@@ -63,6 +63,7 @@ export default function InvestorsList() {
   const [minAvgGain, setMinAvgGain] = useState<number>(-Infinity);
   const [symbolFilter, setSymbolFilter] = useState<string>('');
   const [multiSymbols, setMultiSymbols] = useState<string>('');
+  const [gainAsc, setGainAsc] = useState<boolean>(false); // false = desc (par défaut)
 
   const parsedMultiSymbols = useMemo(() => multiSymbols.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean), [multiSymbols]);
 
@@ -82,8 +83,12 @@ export default function InvestorsList() {
     .filter(inv => (parsedMultiSymbols.length === 0 ? true : parsedMultiSymbols.some(sym =>
       inv.perSymbolUnrealized?.some((p: {symbol: string})=>p.symbol === sym) || inv.investments.some((i: {symbol: string})=>i.symbol === sym)
     )))
-    .sort((a,b) => (b.totalGain ?? Number.NEGATIVE_INFINITY) - (a.totalGain ?? Number.NEGATIVE_INFINITY))
-  , [enhancedInvestors, minAvgGain, symbolFilter, parsedMultiSymbols]);
+    .sort((a,b) => {
+      const av = a.totalGain ?? Number.NEGATIVE_INFINITY;
+      const bv = b.totalGain ?? Number.NEGATIVE_INFINITY;
+      return gainAsc ? av - bv : bv - av;
+    })
+  , [enhancedInvestors, minAvgGain, symbolFilter, parsedMultiSymbols, gainAsc]);
 
   const paginatedInvestors = filteredSortedInvestors.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const totalPages = Math.ceil(filteredSortedInvestors.length / pageSize)
@@ -137,7 +142,9 @@ export default function InvestorsList() {
       <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
         <h2 className="text-xl sm:text-2xl font-bold">🤖 Nos Investisseurs IA</h2>
         <div className="flex flex-wrap items-center gap-3">
-          {/* Tri unique totalGain – sélecteur supprimé */}
+          <button type="button" className="btn btn-xs" onClick={() => { setGainAsc(v => !v); setCurrentPage(1); }}>
+            Tri: Gain total {gainAsc ? '▲' : '▼'}
+          </button>
           <div className="flex items-center gap-2">
             <label className="text-xs" htmlFor="minGain">Gain ≥</label>
             <input id="minGain" type="number" className="input input-bordered input-xs w-20" placeholder="%" onChange={e => { const v = e.target.value === '' ? -Infinity : Number(e.target.value); setMinAvgGain(v); setCurrentPage(1); }} />
