@@ -126,6 +126,8 @@ export default endpoint({
 
     return profiles.map((p: ProfileWithOrders) => {
       const initialBalance = toNum(p.initialBalance);
+      // Agrégat realized
+      // (On ne fait pas d'await dans map synchrone; on aurait pu pré-agréger mais ici simplicité: moved to Promise.all pattern futur si besoin)
       const states = reconstructStates((p.Order ?? []) as unknown as OrderLite[], { onlySide });
       let totalUnrealized = 0;
       let activePositions = 0;
@@ -169,6 +171,13 @@ export default endpoint({
       const totalReturn = totalValue - initialBalance;
       const totalReturnPercent =
         initialBalance > 0 ? (totalReturn / initialBalance) * 100 : 0;
+
+      // Marge: si champ currentBalance disponible, calcul totalGain vs initialBalance
+      // On lira direct currentBalance par requête supplémentaire plus tard si nécessaire pour performance.
+      // Placeholders (non résolus ici pour éviter N requêtes) -> front utilisera investorDetail pour détail.
+      const realizedPnlTotal = undefined; // lazy (optim: batch plus tard)
+      const totalGain = undefined;
+      const totalGainPercent = undefined;
 
       const investments = (p.Order ?? [])
         .slice(-10)
@@ -223,6 +232,9 @@ export default endpoint({
         portfolioSnapshots: [snapshotNow],
         lastExecutions: execInfo.lastExecutions,
         lastExecutedAt: execInfo.lastExecutedAt,
+        realizedPnlTotal,
+        totalGain,
+        totalGainPercent,
         ...metricsObj,
       };
     });

@@ -239,7 +239,7 @@ export default function InvestorsList() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                   <div className="stat p-0">
                     <div className="stat-figure text-primary">
                       {totalReturn >= 0 ? (
@@ -295,6 +295,32 @@ export default function InvestorsList() {
                     </div>
                     <div className="stat-title text-xs truncate">Dernier Trade</div>
                     <div className="stat-value text-xs text-base-content/70 truncate">{lastTrade}</div>
+                  </div>
+                  {/* Nouveau bloc Gains distincts si données disponibles */}
+                  <div className="stat p-0 hidden lg:block">
+                    <div className="stat-figure text-success">
+                      <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m0-8l-3 3m3-3l3 3M4 12a8 8 0 1116 0 8 8 0 01-16 0z" />
+                      </svg>
+                    </div>
+                    <div className="stat-title text-xs">Gains</div>
+                    {(() => {
+                      const realized = typeof investor.realizedPnlTotal === 'number' ? investor.realizedPnlTotal : null;
+                      let realizedStr: string;
+                      if (realized === null) realizedStr = '–'; else realizedStr = `${realized >= 0 ? '+' : ''}${realized.toFixed(2)}`;
+                      const latentVal = investor.portfolioSnapshots[0]?.currentGain ?? 0;
+                      const latentStr = `${latentVal >= 0 ? '+' : ''}${latentVal.toFixed(2)}`;
+                      const total = typeof investor.totalGain === 'number' ? investor.totalGain : null;
+                      let totalStr: string;
+                      if (total === null) totalStr = '–'; else totalStr = `${total >= 0 ? '+' : ''}${total.toFixed(2)}`;
+                      return (
+                        <div className="text-[10px] leading-tight space-y-1 mt-1">
+                          <div><span className="opacity-70">Réalisé:</span> <span className="font-semibold">{realizedStr}</span></div>
+                          <div><span className="opacity-70">Latent:</span> <span className="font-semibold">{latentStr}</span></div>
+                          <div><span className="opacity-70">Total:</span> <span className="font-semibold">{totalStr}</span></div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -484,8 +510,8 @@ export default function InvestorsList() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedInvestor.investments.slice(0, 5).map((investment, index) => (
-                        <tr key={index}>
+                      {selectedInvestor.investments.slice(0, 5).map((investment) => (
+                        <tr key={investment.id}>
                           <td className="text-sm">
                             {new Date(investment.timestamp).toLocaleDateString('fr-FR', {
                               year: 'numeric',

@@ -56,6 +56,10 @@ export interface Investor {
   isActive?: boolean;
   portfolioSnapshots: CryptoPortfolioSnapshot[];
   investments: CryptoInvestment[];
+  realizedPnlTotal?: number; // somme des trades fermés (realized)
+  totalGain?: number; // realized + latent ou currentBalance - initialBalance
+  totalGainPercent?: number; // ratio vs initialBalance
+  currentBalance?: number; // balance reconstruite (si suivie)
   perSymbolUnrealized?: Array<{ symbol: string; unrealized: number }>;
   topSymbol?: string;
   volatilityProxy?: number; // ratio PnL / initialBalance
